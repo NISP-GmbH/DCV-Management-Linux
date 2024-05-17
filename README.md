@@ -4,7 +4,7 @@ The standard approach for NICE DCV Console sessions is to have a session statica
 
 Below we show 2 approaches for managing console sessions - based on permissions and a more controlled via a Python API server
 
-# Always on Console session, permissions for all and only one connection allowed
+## Always on Console session, permissions for all and only one connection allowed
 
 To implement this we automatically create a console sessions for a specific standard user and set the maximal number of connection to the DCV console session to 1 so no other user can connect and allow all users to connect to the session in the permissions file. The guide to implement this approach is here: https://www.ni-sp.com/nice-dcv-dynamic-console-sessions/
 
@@ -12,7 +12,7 @@ In addition we can use commands to logout the user actively after timeout - we n
 * sudo loginctl terminate-user $USER
 * gnome-session-quit --no-prompt
 
-# DCV Management Python API Server to manage DCV virtual and console sessions
+## DCV Management Python API Server to manage DCV virtual and console sessions
 
 The DCV Management service is currently capable to do:
 * Request token access to access your session using SSH service
@@ -33,7 +33,7 @@ Advantages of the local Python HTTP API:
 * Python Flask was used to write the API; Simple library (does not depend of other libraries), where we can write a very simple code, spending more time in the company solutions than in library syntax. ref: https://flask.palletsprojects.com/en/3.0.x/quickstart/
 * The Python code is organized due the mandatory indentation. Also is simple, so anyone can read and understand, besides the syntax. Also, AI's like ChatGPT, Gemini etc are very efficient to understand Python code. Also Python is a base language for many distros, like Bash and Perl.
 
-## Installing DCV Managament API Service
+### Installing DCV Managament API Service
 ```
 bash install.sh
 ```
@@ -43,7 +43,7 @@ bash install.sh
 bash uninstall.sh
 ```
 
-## HTTP requests to the DCV Management API Service
+### HTTP requests to the DCV Management API Service
 
 * Counting how much sessions a specific owner has:
 ```
