@@ -101,11 +101,11 @@ Live log:
 journalctl -u dcv-management.service -f
 ```
 
-## DCV SSH Key Authentication
+# DCV SSH Key Authentication
 
 Allow sessions being authenticated by ssh private/public key.
 
-### How ssh private/public key works
+## How ssh private/public key works
 The ssh client connects to the ssh server and requests a challenge. This challenge will be encrypted using the public key installed in the server. Then the ssh server will return this encrypted challenge to the ssh client, and if the ssh client has the right private key, it will decrypt the challenge and return to the ssh server. If the ssh server receives the right decrypted challenge, it will approve the ssh session.
 
 ### The first approach for DCV SSH Key Authentication: The user executes a bash script or ssh command
