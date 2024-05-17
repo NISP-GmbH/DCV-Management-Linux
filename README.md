@@ -38,7 +38,7 @@ Advantages of the local Python HTTP API:
 bash install.sh
 ```
 
-## Uninstall DCV Management API Service
+### Uninstall DCV Management API Service
 ```
 bash uninstall.sh
 ```
