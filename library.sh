@@ -36,6 +36,13 @@ checkLinuxDistro()
             if cat /etc/issue | egrep -iq "ubuntu"
             then
                 ubuntu_version=$(lsb_release -rs)
+                ubuntu_major_version=$(echo $ubuntu_version | cut -d '.' -f 1)
+                ubuntu_minor_version=$(echo $ubuntu_version | cut -d '.' -f 2)
+                if ( [[ $ubuntu_major_version -lt 18 ]] || [[ $ubuntu_major_version -gt 24  ]] ) && [[ $ubuntu_minor_version -ne 04 ]]
+                then
+                    echo "Your Ubuntu version >>> $ubuntu_version <<< is not supported. Aborting..."
+                    exit 7
+                fi
             else
                 echo "Your Debian Based Linxu distro is not supported."
                 echo "Aborting..."
