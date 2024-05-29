@@ -90,7 +90,7 @@ setupPythonRequiredLibraries()
 {
     # install required libraries
     sudo pip3 install --upgrade pip
-    sudo pip3 install Flask
+    sudo pip3 install Flask --ignore-installed -U blinker
     sudo pip3 install --upgrade setuptools
     sudo pip3 install paramiko
 }
