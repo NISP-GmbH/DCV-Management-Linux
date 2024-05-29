@@ -26,9 +26,23 @@ main()
         checkLinuxDistro
     fi
     checkDcvConfPath
+
+    if [[ "{$ubuntu_version}x" == "x" ]]
+    then
+        if [[ "{$centos_version}x" == "x" ]]
+        then
+            echo "Is not possible to setup any package. Aborting..."
+            exit 7
+        else
+            setupCentosPackages
+        fi
+    else
+        setupUbuntuPackages
+    fi
+
     createDirectories
     copyPythonApp
-    setupRequiredLibraries
+    setupPythonRequiredLibraries
     setAuthTokenVerifier
     setupScripts
     enableSystemdServices

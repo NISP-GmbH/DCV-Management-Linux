@@ -73,10 +73,22 @@ copyPythonApp()
     sudo cp -f api/app.py $dcv_management_dir
 }
 
-setupRequiredLibraries()
+setupCentosPackages()
+{
+    sudo yum -y install python3-pip
+    sudo pip3 install --upgrade pip
+}
+
+setupUbuntuPackages()
+{
+    sudo apt update
+    sudo apt -y install python3-pip
+    sudo pip3 install --upgrade pip 
+}
+
+setupPythonRequiredLibraries()
 {
     # install required libraries
-    sudo yum install python3-pip
     sudo pip3 install --upgrade pip
     sudo pip3 install Flask
     sudo pip3 install --upgrade setuptools
