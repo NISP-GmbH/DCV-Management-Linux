@@ -50,5 +50,7 @@ main()
     exit 0
 }
 
+main
+
 # unknown error
 exit 255
