@@ -33,6 +33,11 @@ Advantages of the local Python HTTP API:
 * Python Flask was used to write the API; Simple library (does not depend of other libraries), where we can write a very simple code, spending more time in the company solutions than in library syntax. ref: https://flask.palletsprojects.com/en/3.0.x/quickstart/
 * The Python code is organized due the mandatory indentation. Also is simple, so anyone can read and understand, besides the syntax. Also, AI's like ChatGPT, Gemini etc are very efficient to understand Python code. Also Python is a base language for many distros, like Bash and Perl.
 
+### Supported Operating Systems
+
+- RedHat based Linux distros (7, 8 and 9)
+- Ubuntu 20.04, 22.04 and 24.04
+
 ### Installing DCV Managament API Service
 ```
 bash install.sh
