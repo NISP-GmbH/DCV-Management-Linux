@@ -1,190 +1,40 @@
-#!/bin/bash
-
-if [ ! -f $dcv_conf_path ]
-then
-	echo "The file >>> $dcv_conf_path <<< was not found. Aborting..."
-	exit 1
-fi
+#!/bin/bashi
 
 # variables to setup the services
 source config.conf
+source library.sh
 
-# create the directories
-sudo mkdir -p $dcv_management_dir
-sudo mkdir -p /var/run/dcvsimpleextauth
-sudo mkdir -p $dcv_tokens_path
-
-# copy the python app
-sudo cp -f api/app.py $dcv_management_dir
-
-# install required libraries
-sudo yum install python3-pip
-sudo pip3 install --upgrade pip
-sudo pip3 install Flask
-sudo pip3 install --upgrade setuptools
-sudo pip3 install paramiko
-
-# Configure the auth-token-verifier
-if grep -q "auth-token-verifier" "$dcv_conf_path"
-then
-  sudo sed -i "s/auth-token-verifier.*/$auth_token_line_to_add/" "$dcv_conf_path"
-else
-  sudo sed -i "/^\[security\]/a $auth_token_line_to_add" "$dcv_conf_path"
-fi
-
-# Create the script that will create and return the token
-cat <<EOF | sudo tee /usr/bin/dcv_get_token
-#!/bin/bash
-
-dcv_tokens_path="$dcv_tokens_path"
-token_expiration_time_in_seconds=\$1
-token=\$(openssl rand -hex 8 | tr -d '\n')
-token_timestamp=\$(date +%s)
-
-if echo \$token_expiration_time_in_seconds | egrep -iq "^[0-9]+$"
-then
-        echo \$token | sudo dcvsimpleextauth add-user --session \$USER --auth-dir /var/run/dcvsimpleextauth/ --user \$USER --append
-
-        cat <<END_DATA | sudo tee \${dcv_tokens_path}/\${USER}.\${token} | > /dev/null
-\${USER};\${token};\${token_timestamp};\${token_expiration_time_in_seconds}
-END_DATA
-
-        echo \$token
-else
-        echo "Expire time is invalid. Please insert a integer value greater than 0, in seconds."
-fi
-EOF
-
-# create the script that will close expired tokens
-cat <<EOF | sudo tee /usr/bin/dcv_tokens_check
-#!/bin/bash
-
-tokens_files_list=\$(ls $dcv_tokens_path)
-for token_file in \$tokens_files_list
+# check parameters
+while [[ "$#" -gt 0 ]]
 do
-        session_id=\$(cat \$token_file | cut -d";" -f1)
-        session_token=\$(cat \$token_file | cut -d";" -f2)
-        session_timestamp=\$(cat \$token_file | cut -d";" -f3)
-        session_expiration_time=\$(cat \$token_file | cut -d";" -f4)
-        current_time=\$(date +%s)
-        time_diff=\$(( current_time - session_timestamp))
-        if [[ \$time_diff -gt \$session_expiration_time ]]
-        then
-                sudo dcvsimpleextauth remove-auth --session \$session_id
-                sudo rm -f \$token_file
-        fi
+    case "$1" in
+        --force)
+            setup_force=true
+            ;;
+        *)
+            echo "Unknown parameter $1"
+            exit 1
+            ;;
+    esac
+    shift
 done
 
-EOF
+main()
+{
+    if [[ "$setup_force" == "false" ]]
+    then
+        checkLinuxDistro
+    fi
+    checkDcvConfPath
+    createDirectories
+    copyPythonApp
+    setupRequiredLibraries
+    setAuthTokenVerifier
+    setupScripts
+    enableSystemdServices
+    setDcvServerCustomPam
+    exit 0
+}
 
-# Create the service that will check the created tokens
-cat <<EOF | sudo tee /etc/systemd/system/dcvtoken.service
-[Unit]
-Description=DCV Tokens checks service
-
-[Service]
-Type=oneshot
-After=network.target
-User=root
-ExecStart=/bin/bash /usr/bin/dcv_tokens_check
-EOF
-
-cat <<EOF | sudo tee /etc/systemd/system/dcvtoken.timer
-[Unit]
-Description=Timer to execute dcvtoken.service oneshot
-
-[Timer]
-OnCalendar=*:0/10
-
-[Install]
-WantedBy=timers.target
-EOF
-
-# Create DCV Management systemd service
-cat <<EOF | sudo tee /etc/systemd/system/dcv-management.service
-[Unit]
-Description=DCV Management API Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/dcv_api
-ExecStart=/usr/bin/python3 /opt/dcv_api/app.py
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# create the dcv_local_sessions_timedout script
-cat <<EOF | sudo tee /usr/bin/dcv_local_sessions_timedout
-#!/bin/bash
-session_owner_list=\$(curl -s http://localhost:5000/list-sessions-owners | grep -Eo '"([^"]+)"' | cut -d '"' -f2 | grep -iv message)
-for owner in \$session_owner_list
-do
-	curl -s http://localhost:5000/check-session-timedout?owner=\$owner &> /dev/null
-done
-EOF
-
-sudo chmod +x /usr/bin/dcv_local_sessions_timedout
-
-if [ ! -f /var/spool/cron/root ]
-then
-	sudo touch /var/spool/cron/root
-	sudo chmod 600 /var/spool/cron/root
-fi
-
-# setup the cron to execute dcv_local_sessions_timedout
-if ! cat /var/spool/cron/root | egrep -iq "dcv_local_sessions_timedout"
-then
-cat <<EOF | sudo tee --append /var/spool/cron/root
-0,30 * * * * /usr/bin/dcv_local_sessions_timedout &> /dev/null
-EOF
-fi
-
-# enable the services
-sudo systemctl daemon-reload
-sudo systemctl enable --now dcv-management.service
-sudo systemctl enable --now dcvtoken.timer
-
-# create  the custom dcv pam file
-cat <<EOF | sudo tee /etc/pam.d/dcv.custom
-auth        required      pam_exec.so /usr/bin/dcv_local_sessions
-auth    include password-auth
-account include password-auth
-EOF
-
-# create the script that will be executed by PAM during authentication
-cat <<EOF | sudo tee /usr/bin/dcv_local_sessions
-#!/bin/bash
-username=\$PAM_USER
-
-if ! curl -s http://localhost:5000/list-sessions 2> /dev/null | grep -iq \$username
-then
-        curl -s http://localhost:5000/create-session?owner=\$username 2>&1 >> /dev/null
-fi
-
-if [ $? -eq 0 ]
-then
-	exit 0
-else
-	exit 1
-fi
-EOF
-
-# set execution permission
-sudo chmod +x /usr/bin/dcv_local_sessions
-
-# configure the dcv server to use the custom pam file
-dcv_conf_path="/etc/dcv/dcv.conf"
-line_to_add="pam-service-name=\"dcv.custom\""
-if grep -q "^pam-service-name" "$dcv_conf_path"
-then
-  sudo sed -i "s/pam-service-name.*/$line_to_add/" "$dcv_conf_path"
-else
-  sudo sed -i "/^\[security\]/a $line_to_add" "$dcv_conf_path"
-fi
-
-# restart the dcv server to read the new pam service
-sudo systemctl restart dcvserver
+# unknown error
+exit 255
