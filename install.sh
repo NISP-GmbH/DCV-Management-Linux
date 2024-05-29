@@ -164,6 +164,13 @@ if ! curl -s http://localhost:5000/list-sessions 2> /dev/null | grep -iq \$usern
 then
         curl -s http://localhost:5000/create-session?owner=\$username 2>&1 >> /dev/null
 fi
+
+if [ $? -eq 0 ]
+then
+	exit 0
+else
+	exit 1
+fi
 EOF
 
 # set execution permission
