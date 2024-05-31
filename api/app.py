@@ -8,6 +8,22 @@ app = Flask(__name__)
 
 return_root = {"return": "This is an API used to manage your DCV services."}
 
+def get_session_type():
+    try:
+        with open('/etc/dcv-management/settings.conf', 'r') as file:
+            for line in file:
+                if line.startswith('session_type='):
+                    session_type = line.split('=')[1].strip()
+                    break
+        if session_type not in ["console", "virtual"]:
+            print("The console type >>> " + session_type + " <<< was not recognized from settings.conf file.")
+            session_type = "virtual" # fallback value
+    except Exception as e:
+        # Log the exception if needed
+        print(f"Error reading session_type: {e}")
+        session_type = "virtual"
+    return session_type
+
 @app.route('/request_token', methods=['POST'])
 def execute_ssh_command():
     data = request.get_json()
@@ -57,22 +73,6 @@ def count_sessions(owner=None):
         return jsonify({"message": "Error: Failed to run count-sessions"}), 500
 
 @app.route('/create-session', methods=['GET'])
-def get_session_type():
-    try:
-        with open('/etc/dcv-management/settings.conf', 'r') as file:
-            for line in file:
-                if line.startswith('session_type='):
-                    session_type = line.split('=')[1].strip()
-                    break
-        if session_type not in ["console", "virtual"]:
-            print("The console type >>> " + session_type + " <<< was not recognized from settings.conf file.")
-            session_type = "virtual" # fallback value
-    except Exception as e:
-        # Log the exception if needed
-        print(f"Error reading session_type: {e}")
-        session_type = "virtual"
-    return session_type
-
 def create_session():
     owner = request.args.get('owner')
     if not owner:
