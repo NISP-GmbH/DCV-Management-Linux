@@ -76,7 +76,7 @@ createDirectories()
 
 createSettingsFile()
 {
-     cat <<EOF | sudo tee /etc/dcv-management/settings.conf
+     cat <<EOF | sudo tee $dcv_management_conf_path
 session_type=virtual
 EOF
 }
@@ -297,6 +297,12 @@ enableSystemdServices()
     sudo systemctl daemon-reload
     sudo systemctl enable --now dcv-management.service
     sudo systemctl enable --now dcvtoken.timer
+}
+
+restartSystemdServices()
+{
+    # restart the services in case of you are updating your setup
+    sudo systemctl restart dcv-management.service
 }
 
 setDcvServerCustomPam()
