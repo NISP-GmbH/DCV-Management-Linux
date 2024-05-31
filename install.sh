@@ -41,7 +41,7 @@ main()
     fi
 
     # if the setup already exist, then we need to reboot systemd services in the end
-    if [ -f $dcv_management_conf_path ]
+    if [ -f $dcv_management_file_conf_path ]
     then
         need_to_restart=1
     else
