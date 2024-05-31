@@ -240,7 +240,7 @@ fi
 EOF
 
     # create the custom dcv pam file
-    cat <<EOF | sudo tee /etc/pam.d/dcv.custom
+    cat <<EOF | sudo tee $dcv_pamd_file_conf
 auth        required      pam_exec.so /usr/bin/dcv_local_sessions
 auth    include dcv-password-auth
 account include dcv-password-auth 
@@ -313,7 +313,7 @@ setDcvServerCustomPam()
 {
     # configure the dcv server to use the custom pam file
     dcv_conf_path="/etc/dcv/dcv.conf"
-    line_to_add="pam-service-name=\"dcv.custom\""
+    line_to_add="pam-service-name=\"$dcv_pamd_file_name\""
     if grep -q "^pam-service-name" "$dcv_conf_path"
     then
         sudo sed -i "s/pam-service-name.*/$line_to_add/" "$dcv_conf_path"
