@@ -98,6 +98,11 @@ This script will check if the session exist and, if not, it will create a sessio
 You can edit the settings.conf file to customize the dcv-management service. Currently here are the supported configs:
 - session_type=virtual or session_type=console ; You can exchange the type of the session that will be created. You do not need to restart the service when you change this setting. If you set a different value, the virtual configuration will be the fallback.
 
+
+## To update
+
+If you already installed DCV Management and you need to update from the git, just do "git pull" or clone the repository again and execute the installation file. It will automatically update your setup.
+
 # Logs
 All requests to DCV Management API Service will be logged under journal log. You can check the logs using the commands below.
 
