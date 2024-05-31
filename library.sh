@@ -77,9 +77,9 @@ createDirectories()
 createSettingsFile()
 {
     # do not create the file again if already exist
-    if [ ! -f $dcv_management_conf_path ]
+    if [ ! -f $dcv_management_file_conf_path ]
     then
-    cat <<EOF | sudo tee $dcv_management_conf_path
+    cat <<EOF | sudo tee $dcv_management_file_conf_path
 session_type=virtual
 EOF
     fi
