@@ -71,8 +71,15 @@ createDirectories()
     sudo mkdir -p $dcv_management_dir
     sudo mkdir -p /var/run/dcvsimpleextauth
     sudo mkdir -p $dcv_tokens_path
+    sudo mkdir -p /etc/dcv-management/
 }
 
+createSettingsFile()
+{
+     cat <<EOF | sudo tee /etc/dcv-management/settings.conf
+console_type=virtual
+EOF
+}
 
 copyPythonApp()
 {

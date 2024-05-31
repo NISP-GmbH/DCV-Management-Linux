@@ -41,6 +41,7 @@ main()
     fi
 
     createDirectories
+    createSettingsFile
     copyPythonApp
     setupPythonRequiredLibraries
     setAuthTokenVerifier
