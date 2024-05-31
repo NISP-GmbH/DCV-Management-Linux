@@ -77,7 +77,7 @@ createDirectories()
 createSettingsFile()
 {
      cat <<EOF | sudo tee /etc/dcv-management/settings.conf
-console_type=virtual
+session_type=virtual
 EOF
 }
 

@@ -57,21 +57,21 @@ def count_sessions(owner=None):
         return jsonify({"message": "Error: Failed to run count-sessions"}), 500
 
 @app.route('/create-session', methods=['GET'])
-def get_console_type():
+def get_session_type():
     try:
         with open('/etc/dcv-management/settings.conf', 'r') as file:
             for line in file:
-                if line.startswith('console_type='):
-                    console_type = line.split('=')[1].strip()
+                if line.startswith('session_type='):
+                    session_type = line.split('=')[1].strip()
                     break
-        if console_type not in ["console", "virtual"]:
-            print("The console type >>> " + console_type + " <<< was not recognized from settings.conf file.")
-            console_type = "virtual" # fallback value
+        if session_type not in ["console", "virtual"]:
+            print("The console type >>> " + session_type + " <<< was not recognized from settings.conf file.")
+            session_type = "virtual" # fallback value
     except Exception as e:
         # Log the exception if needed
-        print(f"Error reading console_type: {e}")
-        console_type = "virtual"
-    return console_type
+        print(f"Error reading session_type: {e}")
+        session_type = "virtual"
+    return session_type
 
 def create_session():
     owner = request.args.get('owner')
@@ -81,8 +81,8 @@ def create_session():
     data = response[0] # json part
     data_parsed = json.loads(data.get_data(as_text=True))
     owner_count = int(data_parsed["message"])
-    console_type = get_console_type()
-    command = " ".join(["/usr/bin/dcv", "create-session", "--owner", owner, "--name", owner, "--type", console_type, owner])
+    session_type = get_session_type()
+    command = " ".join(["/usr/bin/dcv", "create-session", "--owner", owner, "--name", owner, "--type", session_type, owner])
     if owner_count == 0:
         try:
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
