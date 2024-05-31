@@ -40,6 +40,14 @@ main()
         setupUbuntuPackages
     fi
 
+    # if the setup already exist, then we need to reboot systemd services in the end
+    if [ -f $dcv_management_conf_path ]
+    then
+        need_to_restart=1
+    else
+        need_to_restart=0
+    fi
+
     createDirectories
     createSettingsFile
     copyPythonApp
@@ -48,6 +56,12 @@ main()
     setupScripts
     enableSystemdServices
     setDcvServerCustomPam
+
+    if  [ $need_to_restart -eq 1 ]
+    then
+        restartSystemdServices
+    fi
+
     exit 0
 }
 
