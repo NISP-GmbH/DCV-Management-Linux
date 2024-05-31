@@ -57,6 +57,22 @@ def count_sessions(owner=None):
         return jsonify({"message": "Error: Failed to run count-sessions"}), 500
 
 @app.route('/create-session', methods=['GET'])
+def get_console_type():
+    try:
+        with open('/etc/dcv-management/settings.conf', 'r') as file:
+            for line in file:
+                if line.startswith('console_type='):
+                    console_type = line.split('=')[1].strip()
+                    break
+        if console_type not in ["console", "virtual"]:
+            print("The console type >>> " + console_type + " <<< was not recognized from settings.conf file.")
+            console_type = "virtual" # fallback value
+    except Exception as e:
+        # Log the exception if needed
+        print(f"Error reading console_type: {e}")
+        console_type = "virtual"
+    return console_type
+
 def create_session():
     owner = request.args.get('owner')
     if not owner:
@@ -65,7 +81,8 @@ def create_session():
     data = response[0] # json part
     data_parsed = json.loads(data.get_data(as_text=True))
     owner_count = int(data_parsed["message"])
-    command = " ".join(["/usr/bin/dcv", "create-session", "--owner", owner, "--name", owner, "--type", "console", owner])
+    console_type = get_console_type()
+    command = " ".join(["/usr/bin/dcv", "create-session", "--owner", owner, "--name", owner, "--type", console_type, owner])
     if owner_count == 0:
         try:
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
