@@ -93,6 +93,11 @@ Before the authentication process finishes, it will execute this script:
 
 This script will check if the session exist and, if not, it will create a session dinamically. As the script will request the API service to create the session; No admin permissions are needed.
 
+## Configuration file (/etc/dcv-management/settings.conf)
+
+You can edit the settings.conf file to customize the dcv-management service. Currently here are the supported configs:
+- session_type=virtual or session_type=console ; You can exchange the type of the session that will be created. You do not need to restart the service when you change this setting. If you set a different value, the virtual configuration will be the fallback.
+
 # Logs
 All requests to DCV Management API Service will be logged under journal log. You can check the logs using the commands below.
 
