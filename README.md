@@ -18,6 +18,7 @@ The DCV Management service is currently capable to do:
 * Request token access to access your session using SSH service
 * Count sessions by owner
 * Create a session
+* Create a session during new PAM login
 * Close a session
 * List connections
 * List sessions
