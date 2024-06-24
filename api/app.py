@@ -162,6 +162,13 @@ def check_session_timedout(owner=None):
         time_difference = disconnection_time - creation_time
         difference_in_seconds = time_difference.total_seconds()
 
+        if last_disconnection_time_str:
+            # If there's a disconnection time, use it
+            disconnection_time = datetime.strptime(last_disconnection_time_str, format_string)
+        else:
+            # If there's no disconnection time, use the current time
+            disconnection_time = datetime.now(timezone.utc)
+
         if num_connections == 0:
             if difference_in_seconds > 1800:
                 response = close_session(owner)
