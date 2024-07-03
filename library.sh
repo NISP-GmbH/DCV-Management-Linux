@@ -248,16 +248,13 @@ EOF
     cat <<EOF | sudo tee /etc/pam.d/dcv-password-auth
 auth        required                                     pam_env.so
 auth        required                                     pam_faildelay.so delay=2000000
-auth        [default=1 ignore=ignore success=ok]         pam_usertype.so isregular
 auth        [default=1 ignore=ignore success=ok]         pam_localuser.so
 auth        sufficient                                   pam_unix.so nullok
-auth        [default=1 ignore=ignore success=ok]         pam_usertype.so isregular
 auth        sufficient                                   pam_sss.so forward_pass
 auth        required                                     pam_deny.so
 
 account     required                                     pam_unix.so
 account     sufficient                                   pam_localuser.so
-account     sufficient                                   pam_usertype.so issystem
 account     [default=bad success=ok user_unknown=ignore] pam_sss.so
 account     required                                     pam_permit.so
 
