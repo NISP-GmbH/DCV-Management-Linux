@@ -27,9 +27,9 @@ main()
     fi
     checkDcvConfPath
 
-    if [[ "{$ubuntu_version}x" == "x" ]]
+    if [[ "{$ubuntu_distro}" == "true" ]]
     then
-        if [[ "{$centos_version}x" == "x" ]]
+        if [[ "{$redhat_distro_based}" == "true" ]]
         then
             echo "Is not possible to setup any package. Aborting..."
             exit 7
