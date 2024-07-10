@@ -105,7 +105,7 @@ copyPythonApp()
     sudo cp -f api/app.py $dcv_management_dir
 }
 
-setupCentosPackages()
+setupRedhatPackages()
 {
     sudo yum -y install python3-pip
     sudo pip3 install --upgrade pip

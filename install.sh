@@ -34,7 +34,7 @@ main()
             echo "Is not possible to setup any package. Aborting..."
             exit 7
         else
-            setupCentosPackages
+            setupRedhatPackages
         fi
     else
         setupUbuntuPackages
