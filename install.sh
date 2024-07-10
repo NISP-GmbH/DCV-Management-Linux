@@ -24,6 +24,21 @@ main()
     if [[ "$setup_force" == "false" ]]
     then
         checkLinuxDistro
+    else
+        echo "Which distro you are using? Type >>> ubuntu <<< for Ubuntu based or >>> redhat <<< for RedHat based"
+        read linux_distro
+        if echo $linux_distro | egrep -iq "ubuntu"
+        then
+            ubuntu_distro="true"
+        else
+            if echo $linux_distro | egrep -iq "redhat"
+            then
+                redhat_distro_based="true"
+            else
+                echo "Not recognized Linux distro. Aborting..."
+                exit 8
+            fi
+        fi
     fi
     checkDcvConfPath
 
