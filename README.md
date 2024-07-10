@@ -36,7 +36,7 @@ Advantages of the local Python HTTP API:
 
 ### Supported Operating Systems
 
-- RedHat based Linux distros (7, 8 and 9)
+- RedHat based Linux distros (7, 8 and 9): CentOS, CentOS Stream, RockyLinux and AlmaLinux
 - Ubuntu 18.04, 20.04, 22.04 and 24.04
 
 ### Installing DCV Managament API Service
