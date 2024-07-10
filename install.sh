@@ -1,4 +1,4 @@
-#!/bin/bashi
+#!/bin/bash
 
 # variables to setup the services
 source config.conf
