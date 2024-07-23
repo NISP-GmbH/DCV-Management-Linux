@@ -260,31 +260,77 @@ auth    include dcv-password-auth
 account include dcv-password-auth 
 EOF
     cat <<EOF | sudo tee /etc/pam.d/dcv-password-auth
-auth        required                                     pam_env.so
-auth        required                                     pam_faildelay.so delay=2000000
-auth        [default=1 ignore=ignore success=ok]         pam_localuser.so
-auth        sufficient                                   pam_unix.so nullok
-auth        sufficient                                   pam_sss.so forward_pass
-auth        required                                     pam_deny.so
+# Load environment variables
+auth        required      pam_env.so
 
-account     required                                     pam_unix.so
-account     sufficient                                   pam_localuser.so
+# Introduce a delay on authentication failure to slow down brute-force attempts
+auth        required      pam_faildelay.so delay=2000000
+
+# Try local authentication first
+# If successful, skip next auth module; if fails, continue to next
+auth        [success=1 default=ignore]  pam_unix.so nullok try_first_pass
+
+# If local fails, try SSSD
+# If successful, skip next auth module; if fails, continue to next
+auth        [success=1 default=ignore]  pam_sss.so use_first_pass
+
+# If SSSD fails, try Kerberos
+# If successful, skip next auth module; if fails, continue to next
+auth        [success=1 default=ignore]  pam_krb5.so use_first_pass
+
+# If all above fail, deny access
+auth        required      pam_deny.so
+
+# Check account validity using local passwd file
+account     required      pam_unix.so
+
+# Check account validity using SSSD
+# Ignore if user unknown, succeed if check passes, fail otherwise
 account     [default=bad success=ok user_unknown=ignore] pam_sss.so
-account     required                                     pam_permit.so
 
-password    requisite                                    pam_pwquality.so local_users_only
-password    sufficient                                   pam_unix.so sha512 shadow nullok use_authtok
-password    [success=1 default=ignore]                   pam_localuser.so
-password    sufficient                                   pam_sss.so use_authtok
-password    required                                     pam_deny.so
+# Check account validity using Kerberos
+# Ignore if user unknown, succeed if check passes, fail otherwise
+account     [default=bad success=ok user_unknown=ignore] pam_krb5.so
 
-session     optional                                     pam_keyinit.so revoke
-session     required                                     pam_limits.so
--session    optional                                     pam_systemd.so
-session     optional                                     pam_oddjob_mkhomedir.so
-session     [success=1 default=ignore]                   pam_succeed_if.so service in crond quiet use_uid
-session     required                                     pam_unix.so
-session     optional                                     pam_sss.so
+# Check password quality for local users
+password    requisite     pam_pwquality.so local_users_only
+
+# Change password in local passwd file
+# Use SHA512 hashing, allow empty passwords if configured
+password    sufficient    pam_unix.so sha512 shadow nullok use_authtok
+
+# Change password in SSSD
+password    sufficient    pam_sss.so use_authtok
+
+# Change password in Kerberos
+password    sufficient    pam_krb5.so use_authtok
+
+# If all password changes fail, deny the password change
+password    required      pam_deny.so
+
+# Set up kernel keyring for the session
+session     optional      pam_keyinit.so revoke
+
+# Apply resource limits from /etc/security/limits.conf
+session     required      pam_limits.so
+
+# Register the session with systemd
+-session    optional      pam_systemd.so
+
+# Create home directory on first login
+session     optional      pam_mkhomedir.so
+
+# Skip session setup for cron jobs
+session     [success=1 default=ignore] pam_succeed_if.so service in crond quiet use_uid
+
+# Set up user session (update login records, etc.)
+session     required      pam_unix.so
+
+# Set up SSSD session (if SSSD is being used)
+session     optional      pam_sss.so
+
+# Set up Kerberos session (if Kerberos is being used)
+session     optional      pam_krb5.so
 EOF
 
     # set execution permission
