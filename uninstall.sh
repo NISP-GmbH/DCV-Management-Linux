@@ -15,6 +15,7 @@ sudo rm -f /usr/bin/dcv_get_token
 sudo rm -f /usr/bin/dcv_tokens_check
 sudo rm -f /usr/bin/dcv_local_sessions
 sudo rm -f /usr/bin/dcv_local_sessions_timedout
+sudo rm -f $dcv_collab_prompt_script
 sudo rm -f $dcv_management_conf_path
 sudo rm -f $dcv_pamd_file_conf
 sudo sed '/^pam-service-name=.*$/d' /etc/dcv/dcv.conf
