@@ -95,6 +95,9 @@ createSettingsFile()
     then
     cat <<EOF | sudo tee $dcv_management_file_conf_path
 session_type=virtual
+dcv_collab=false
+dcv_collab_prompt_timeout=20
+dcv_collab_session_name=
 EOF
     fi
 }
@@ -140,6 +143,12 @@ setAuthTokenVerifier()
 
 setupScripts()
 {
+    # Install scripts
+    sudo cp $(basename $dcv_collab_prompt_script).sh $dcv_collab_prompt_script
+    sudo chmod +x $dcv_collab_prompt_script
+    sudo cp $(basename $dcv_local_sessions).sh $dcv_local_sessions
+    sudo chmod +x $dcv_local_sessions
+
     # Create the script that will create and return the token
     cat <<EOF | sudo tee /usr/bin/dcv_get_token
 #!/bin/bash
@@ -235,102 +244,38 @@ do
 done
 EOF
 
-    # create the script that will be executed by PAM during authentication
-    cat <<EOF | sudo tee /usr/bin/dcv_local_sessions
-#!/bin/bash
-username=\$PAM_USER
-
-if ! curl -s http://localhost:5000/list-sessions 2> /dev/null | grep -iq \$username
-then
-        curl -s http://localhost:5000/create-session?owner=\$username 2>&1 >> /dev/null
-fi
-
-if [ $? -eq 0 ]
-then
-	exit 0
-else
-	exit 1
-fi
-EOF
-
     # create the custom dcv pam file
     cat <<EOF | sudo tee $dcv_pamd_file_conf
-auth        required      pam_exec.so /usr/bin/dcv_local_sessions
 auth    include dcv-password-auth
+auth        required      pam_exec.so /usr/bin/dcv_local_sessions
 account include dcv-password-auth 
 EOF
     cat <<EOF | sudo tee /etc/pam.d/dcv-password-auth
-# Load environment variables
-auth        required      pam_env.so
+# here are the per-package modules (the "Primary" block)
+auth    [success=2 default=ignore]      pam_unix.so nullok
+auth    [success=1 default=ignore]      pam_sss.so use_first_pass
+# here's the fallback if no module succeeds
+auth    requisite                       pam_deny.so
+# prime the stack with a positive return value if there isn't one already;
+# this avoids us returning an error just because nothing sets a success code
+# since the modules above will each just jump around
+auth    required                        pam_permit.so
+# and here are more per-package modules (the "Additional" block)
+auth    optional                        pam_cap.so
+# end of pam-auth-update config
 
-# Introduce a delay on authentication failure to slow down brute-force attempts
-auth        required      pam_faildelay.so delay=2000000
-
-# Try local authentication first
-# If successful, skip next auth module; if fails, continue to next
-auth        [success=1 default=ignore]  pam_unix.so nullok try_first_pass
-
-# If local fails, try SSSD
-# If successful, skip next auth module; if fails, continue to next
-auth        [success=1 default=ignore]  pam_sss.so use_first_pass
-
-# If SSSD fails, try Kerberos
-# If successful, skip next auth module; if fails, continue to next
-auth        [success=1 default=ignore]  pam_krb5.so use_first_pass
-
-# If all above fail, deny access
-auth        required      pam_deny.so
-
-# Check account validity using local passwd file
-account     required      pam_unix.so
-
-# Check account validity using SSSD
-# Ignore if user unknown, succeed if check passes, fail otherwise
-account     [default=bad success=ok user_unknown=ignore] pam_sss.so
-
-# Check account validity using Kerberos
-# Ignore if user unknown, succeed if check passes, fail otherwise
-account     [default=bad success=ok user_unknown=ignore] pam_krb5.so
-
-# Check password quality for local users
-password    requisite     pam_pwquality.so local_users_only
-
-# Change password in local passwd file
-# Use SHA512 hashing, allow empty passwords if configured
-password    sufficient    pam_unix.so sha512 shadow nullok use_authtok
-
-# Change password in SSSD
-password    sufficient    pam_sss.so use_authtok
-
-# Change password in Kerberos
-password    sufficient    pam_krb5.so use_authtok
-
-# If all password changes fail, deny the password change
-password    required      pam_deny.so
-
-# Set up kernel keyring for the session
-session     optional      pam_keyinit.so revoke
-
-# Apply resource limits from /etc/security/limits.conf
-session     required      pam_limits.so
-
-# Register the session with systemd
--session    optional      pam_systemd.so
-
-# Create home directory on first login
-session     optional      pam_mkhomedir.so
-
-# Skip session setup for cron jobs
-session     [success=1 default=ignore] pam_succeed_if.so service in crond quiet use_uid
-
-# Set up user session (update login records, etc.)
-session     required      pam_unix.so
-
-# Set up SSSD session (if SSSD is being used)
-session     optional      pam_sss.so
-
-# Set up Kerberos session (if Kerberos is being used)
-session     optional      pam_krb5.so
+# here are the per-package modules (the "Primary" block)
+account [success=1 new_authtok_reqd=done default=ignore]        pam_unix.so
+# here's the fallback if no module succeeds
+account requisite                       pam_deny.so
+# prime the stack with a positive return value if there isn't one already;
+# this avoids us returning an error just because nothing sets a success code
+# since the modules above will each just jump around
+account required                        pam_permit.so
+# and here are more per-package modules (the "Additional" block)
+account sufficient                      pam_localuser.so
+account [default=bad success=ok user_unknown=ignore]    pam_sss.so
+# end of pam-auth-update config
 EOF
 
     # set execution permission
