@@ -1,11 +1,18 @@
 #!/bin/bash
-# debug line
-# exec 2>"/tmp/ef.auth.debug.log.$$";set -x
 #set -e
 
+# variables
 username=$PAM_USER
 hostname="localhost"
 port="5000"
+debug="false"
+debug_file_name="/tmp/dcv-management-auth-debug.log.$$"
+
+# enable verbose if debug is true
+if echo $debug | egrep -iq "true"
+then
+    exec 2>"${debug_file_name}";set -x
+fi
 
 # check if collab feature is enabled
 curl_result=$(curl -s http://${hostname}:${port}/check-collab-settings 2> /dev/null)
