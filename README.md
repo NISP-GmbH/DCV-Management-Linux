@@ -24,6 +24,7 @@ The DCV Management service is currently capable to do:
 * List sessions
 * List sessions by owner
 * Check session timedout
+* Collaboration session: The session owner will control the session and additional users can ask to see (without control) the owner session
 
 Advantages of the local Python HTTP API:
 * Do not need to use SUDO anymore, as we can control the service using http calls
@@ -75,7 +76,35 @@ curl -s http://localhost:5000/create-session?owner=centos
 curl -s http://localhost:5000/list-sessions-owners
 ```
 
-## DCV dynamic session creation
+## DCV Collaboration mode
+
+With the Collaboration mode you can share your session (session owner) with other users (without control). A request approval window will appear in the session owner to Approve or Deny the user to see the session.
+
+If the session owner disconnect by any reason, and if the session is still alive, the collab users will see a black window until the session owner connect again, sharing the screen again.
+
+To enable the feature, you need to edit the file /etc/dcv-management/settings.conf and set:
+
+```bash
+dcv_collab=true
+```
+
+Note: Currently only one session (console or virtual) will support the collab feature.
+
+Other possible settings:
+
+```bash
+session_type=console
+dcv_collab_prompt_timeout=20
+dcv_collab_session_name=
+dcv_collab_sessions_permissions_dir=/etc/dcv-management/sessions-permissions.d
+```
+
+* session_type : (console|virtual) the type of the session that will use collab feature
+* dcv_collab_prompt_timeout : the timeout to wait session owner approval before automatically deny the user access
+* dcv_collab_session_name : you can set the name of the session that will use collab feature. If you do not set, it will use the first session according "dcv list-sessions" command.
+* dcv_collab_sessions_permissions_dir : where will be stored the approved users for that session. You can safely remove any files, the API service will create again when needed.
+
+## DCV Dynamic Session Creation
 
 When the user login in DCV web dashboard, it will use Linux PAM service to do the authentication. The PAM config file is
 ```

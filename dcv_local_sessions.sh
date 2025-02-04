@@ -5,7 +5,7 @@
 username=$PAM_USER
 hostname="localhost"
 port="5000"
-debug="false"
+debug="true"
 debug_file_name="/tmp/dcv-management-auth-debug.log.$$"
 
 # enable verbose if debug is true
@@ -22,8 +22,21 @@ collab_enabled=$(echo "$curl_result" | grep '"collab_enabled"' | sed 's/.*"colla
 if echo $collab_enabled | egrep -iq "true"
 then
     collab_session_name=$(echo "$curl_result" | grep '"session_name"' | sed 's/.*"session_name":[[:space:]]*"\([^"]*\)".*/\1/')
-    curl_result=$(curl -s http://${hostname}:${port}/get-session-owner?session_name=${collab_session_name})
-    collab_session_owner=$(echo "$curl_result" | sed -n 's/.*"owner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    if ! echo ${collab_session_name} | egrep -iq "null"
+    then
+        curl_result=$(curl -s http://${hostname}:${port}/get-session-owner?session_name=${collab_session_name})
+        collab_session_owner=$(echo "$curl_result" | sed -n 's/.*"owner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    else
+        curl_result=$(curl -s http://${hostname}:${port}/get-first-session)
+        collab_session_name=$(echo "$curl_result" | sed -n 's/.*"message":[[:space:]]*"\([^"]*\)".*/\1/p')
+        if ! echo $collab_session_name | egrep -iq "null"
+        then
+            curl_result=$(curl -s http://${hostname}:${port}/get-session-owner?session_name=${collab_session_name})
+            collab_session_owner=$(echo "$curl_result" | sed -n 's/.*"owner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        else
+            collab_session_owner="thereisnocollabsessionavailable"
+        fi
+    fi
 fi
 
 # check if there is a session created
@@ -40,6 +53,7 @@ then
     # if there is no session
     if echo $session_created | egrep -iq "false"
     then
+        # create the session
         curl -s http://${hostname}:${port}/create-session?owner=$username 2>&1 >> /dev/null
         if [ $? -eq 0 ]
         then
@@ -65,7 +79,7 @@ then
             exit 0
         # and the user is not the collab session owner
         else
-            curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?username=${collab_session_owner}&collab_username=${username}")
+            curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?collab_session_owner=${collab_session_owner}&collab_username=${username}")
             approval=$(echo "$curl_result" | grep -o '"message": *[^,}]*' | sed 's/"message": *\(.*\)/\1/')
             approval=$(echo "$approval" | tr -d ' "')
 
@@ -76,7 +90,7 @@ then
                 exit 3
             fi
         fi
-    # and the collab session is closed
+    # and if the collab session is closed
     else
         curl -s http://${hostname}:${port}/create-session?owner=$username 2>&1 >> /dev/null
         if [ $? -eq 0 ]

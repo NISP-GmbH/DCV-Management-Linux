@@ -109,11 +109,11 @@ fi
 LOG_FILE="/var/log/send_prompt.log"
 
 # Construct the approval message
-APPROVAL_MESSAGE="User '$COLLAB_USERNAME' is requesting authorization to log in. Do you approve this request?"
+APPROVAL_MESSAGE="User '$COLLAB_USERNAME' is requesting authorization to join the session. Do you approve this request?"
 
 # Display the dialog
 zenity --question \
-       --title="Login Approval" \
+       --title="Collaboration Request" \
        --text="$APPROVAL_MESSAGE" \
        --timeout="$TIMEOUT" \
        --ok-label="Approve" \

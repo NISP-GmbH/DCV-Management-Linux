@@ -85,7 +85,7 @@ createDirectories()
     sudo mkdir -p $dcv_management_dir
     sudo mkdir -p /var/run/dcvsimpleextauth
     sudo mkdir -p $dcv_tokens_path
-    sudo mkdir -p /etc/dcv-management/
+    sudo mkdir -p /etc/dcv-management/sessions-permissions.d
 }
 
 createSettingsFile()
@@ -98,6 +98,7 @@ session_type=virtual
 dcv_collab=false
 dcv_collab_prompt_timeout=20
 dcv_collab_session_name=
+dcv_collab_sessions_permissions_dir=/etc/dcv-management/sessions-permissions.d
 EOF
     fi
 }
