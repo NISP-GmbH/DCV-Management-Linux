@@ -246,11 +246,20 @@ done
 EOF
 
     # create the custom dcv pam file
+    # backup it if already exist
+    if [ -f "$dcv_pamd_file_conf" ]
+    then
+        timestamp=$(date +%s)
+        backup_file="${dcv_pamd_file_conf}.backup.${timestamp}"
+        sudo cp "$dcv_pamd_file_conf" "$backup_file"
+    fi
+
     cat <<EOF | sudo tee $dcv_pamd_file_conf
 auth    include dcv-password-auth
 auth        required      pam_exec.so /usr/bin/dcv_local_sessions
 account include dcv-password-auth 
 EOF
+    
     cat <<EOF | sudo tee /etc/pam.d/dcv-password-auth
 # here are the per-package modules (the "Primary" block)
 auth    [success=2 default=ignore]      pam_unix.so nullok
