@@ -5,7 +5,7 @@
 username=$PAM_USER
 hostname="localhost"
 port="5000"
-debug="true"
+debug="false"
 debug_file_name="/tmp/dcv-management-auth-debug.log.$$"
 
 # enable verbose if debug is true
