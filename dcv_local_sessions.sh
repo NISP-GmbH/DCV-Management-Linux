@@ -16,23 +16,78 @@ fi
 
 # check if collab feature is enabled
 curl_result=$(curl -s http://${hostname}:${port}/check-collab-settings 2> /dev/null)
-collab_enabled=$(echo "$curl_result" | grep '"collab_enabled"' | sed 's/.*"collab_enabled":[[:space:]]*\([^,}]*\).*/\1/')
+collab_enabled=$(echo "$curl_result" | jq -r '.message.collab_enabled')
+session_type=$(echo "$curl_result" | jq -r '.message.session_type')
+session_auto_creation_by_dcv=$(echo $curl_result | jq -r '.message.session_auto_creation_by_dcv')
+
+# if enabled, and the dcv server auto creation is enabled
+if echo $collab_enabled | egrep -iq "true"
+then
+    if echo $session_auto_creation_by_dcv | egrep -iq "true"
+    then
+        # get the id of the session created by DCV
+        curl_result=$(curl -s http://${hostname}:${port}/list-sessions-json)
+        session_id=$(echo "$curl_result" | jq -r '.message[0].id')
+
+        # Verify that an id was indeed extracted
+        if [ -z "$session_id" ] || [ "$session_id" = "null" ]
+        then
+            echo "Error: session id not found in JSON output." >&2
+            exit 14
+        fi
+
+        number_of_connections=$(echo "$curl_result" | jq -r '.message[0]["num-of-connections"]')
+        if [ -z "$number_of_connections" ] || [ "$number_of_connections" = "null" ]
+        then
+            echo "Error: number_of_connections not found in JSON output." >&2
+            exit 15
+        fi        
+
+        # if is the first user connected, it will be the owner
+        if [ "$number_of_connections" -eq 0 ]
+        then
+            curl_result=$(curl -s -X POST "http://${hostname}:${port}/collab-set-session-owner?session_owner=${username}&session_id=${session_id}")
+            exit 0
+        else
+            curl_result=$(curl -s -X GET "http://${hostname}:${port}/collab-get-session-owner")
+            collab_session_owner=$(echo $curl_result | jq -r '.message.collab_session_owner')
+
+            # if is not the first user connected, but is the owner
+            if [[ "$username" == "$collab_session_owner" ]]
+            then
+                exit 0
+            # if is not the first user connected, and is not the owner
+            else
+                curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?collab_session_owner=${collab_session_owner}&collab_username=${username}&number_of_connections=$number_of_connections&session_id=${session_id}")
+                approval=$(echo "$curl_result" | jq -r ".message")
+
+                if echo $approval | egrep -iq "true"
+                then
+                    exit 0
+                else
+                    exit 15
+                fi
+            fi
+        fi
+    fi
+fi
+
 
 # if enabled, get the collab session name
 if echo $collab_enabled | egrep -iq "true"
 then
-    collab_session_name=$(echo "$curl_result" | grep '"session_name"' | sed 's/.*"session_name":[[:space:]]*"\([^"]*\)".*/\1/')
+    collab_session_name=$(echo "$curl_result" | jq -r '.message.session_name')
     if ! echo ${collab_session_name} | egrep -iq "null"
     then
         curl_result=$(curl -s http://${hostname}:${port}/get-session-owner?session_name=${collab_session_name})
-        collab_session_owner=$(echo "$curl_result" | sed -n 's/.*"owner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        collab_session_owner=$(echo "$curl_result" | jq -r '.message.owner')
     else
         curl_result=$(curl -s http://${hostname}:${port}/get-first-session)
-        collab_session_name=$(echo "$curl_result" | sed -n 's/.*"message":[[:space:]]*"\([^"]*\)".*/\1/p')
+        collab_session_name=$(echo "$curl_result" | jq -r '.message')
         if ! echo $collab_session_name | egrep -iq "null"
         then
             curl_result=$(curl -s http://${hostname}:${port}/get-session-owner?session_name=${collab_session_name})
-            collab_session_owner=$(echo "$curl_result" | sed -n 's/.*"owner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+            collab_session_owner=$(echo "$curl_result" | jq -r '.message.owner')
         else
             collab_session_owner="thereisnocollabsessionavailable"
         fi
@@ -80,8 +135,7 @@ then
         # and the user is not the collab session owner
         else
             curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?collab_session_owner=${collab_session_owner}&collab_username=${username}")
-            approval=$(echo "$curl_result" | grep -o '"message": *[^,}]*' | sed 's/"message": *\(.*\)/\1/')
-            approval=$(echo "$approval" | tr -d ' "')
+            approval=$(echo "$curl_result" | jq -r ".message")
 
             if echo $approval | egrep -iq "true"
             then
