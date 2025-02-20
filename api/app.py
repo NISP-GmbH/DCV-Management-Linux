@@ -3,15 +3,21 @@ import subprocess
 import os
 import json
 import re
+import pwd
+import stat
 from datetime import datetime
 
 app = Flask(__name__)
+
+# Global variable
+collab_session_owner = ""
 
 def read_settings_conf():
     # Define fallback/default values
     settings = {
         "session_type": "virtual",
         "dcv_collab": "false",
+        "session_auto_creation_by_dcv": "false",
         "dcv_cllab_prompt_timeout": 20,
         "dcv_collab_session_name": "",
         "dcv_collab_sessions_permissions_dir": "/etc/dcv-management/sessions-permissions.d"
@@ -40,6 +46,78 @@ def read_settings_conf():
     except Exception as e:
         print(f"Error reading settings.conf: {e}. Using default fallback values.")
     return settings
+def manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=None, overwrite=False):
+    settings = read_settings_conf()
+    session_perm_dir = settings.get('dcv_collab_sessions_permissions_dir', '')
+    if not session_perm_dir:
+        return {"message": "Session permissions directory is not configured."}, 500
+
+    perm_file_path = os.path.join(session_perm_dir, f"{collab_session_name}.perm")
+    created = False
+
+    # Create or overwrite file with a base template
+    if overwrite or not os.path.exists(perm_file_path):
+        content = (
+            "[groups]\n\n"
+            "[aliases]\n\n"
+            "[permissions]\n"
+            f"{collab_session_owner} allow builtin\n"
+        )
+        with open(perm_file_path, 'w') as f:
+            f.write(content)
+        created = True
+    elif new_permission_line:
+        # File exists so update it: add new_permission_line to the [permissions] section if missing
+        with open(perm_file_path, 'r') as f:
+            lines = f.readlines()
+
+        updated = False
+        new_lines = []
+        in_permissions = False
+        for i, line in enumerate(lines):
+            new_lines.append(line)
+            if line.strip() == "[permissions]":
+                in_permissions = True
+                # Check whether the new_permission_line is already present until another section starts
+                found = False
+                for subsequent_line in lines[i+1:]:
+                    if subsequent_line.strip().startswith('['):  # reached next section
+                        break
+                    if subsequent_line.strip() == new_permission_line:
+                        found = True
+                        break
+                if not found:
+                    new_lines.append(new_permission_line + "\n")
+                    updated = True
+        # If there was no [permissions] section, add one at the end
+        if not in_permissions:
+            new_lines.append("\n[permissions]\n")
+            new_lines.append(new_permission_line + "\n")
+            updated = True
+
+        if updated:
+            with open(perm_file_path, 'w') as f:
+                f.writelines(new_lines)
+
+    # Execute the set-permissions command
+    command = [
+        "sudo",
+        "-u",
+        "dcv",
+        "dcv",
+        "set-permissions",
+        "--session",
+        collab_session_name,
+        "--file",
+        perm_file_path
+    ]
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    if result.returncode != 0:
+        return {"message": f"Error executing set-permissions: {result.stderr.strip()}"}, 500
+
+    action = "created" if created else "updated"
+    return {"message": f"Permission file '{perm_file_path}' {action} successfully."}, 200
 
 def session_exists(session_name):
     try:
@@ -76,144 +154,24 @@ def get_session_type():
     return session_type
 
 def is_positive_integer(value):
-    """
-    Validates if the provided value is a positive integer.
-    Returns True if valid, False otherwise.
-    """
     try:
         int_value = int(value)
         return int_value > 0
     except (TypeError, ValueError):
         return False
 
-def handle_create_permission_file(collab_session_owner, collab_session_name):
-    if not collab_session_owner or not collab_session_name:
-        return {
-            "message": "Missing 'collab_owner_username' or 'collab_session_name' parameter."
-        }, 400
-
-    settings = read_settings_conf()
-    session_perm_dir = settings.get('dcv_collab_sessions_permissions_dir', '')
-    perm_file_path = os.path.join(session_perm_dir, f"{collab_session_owner}.perm")
-
-    if not os.path.exists(perm_file_path):
-        content = f"""[groups]
-
-[aliases]
-
-[permissions]
-{collab_session_owner} allow builtin
-"""
-
-        try:
-            with open(perm_file_path, 'w') as perm_file:
-                perm_file.write(content)
-            return {
-                "message": f"Permission file '{perm_file_path}' created successfully."
-            }, 200
-        except Exception as e:
-            return {
-                "message": f"Error creating permission file: {str(e)}",
-                "stderr": str(e)
-            }, 500
-    else:
-        return {
-            "message": f"File '{perm_file_path}' already exist."
-        }, 200
-
-def handle_add_permission(collab_session_owner, collab_session_name, collab_add_username):
-    if not collab_session_owner or not collab_session_name or not collab_add_username:
-        return {"message": "Missing one or more parameters: 'collab_session_owner', 'collab_session_name', 'collab_add_username'."}, 400
-
-    settings = read_settings_conf()
-    session_perm_dir = settings.get('dcv_collab_sessions_permissions_dir', '')
-    perm_file_path = f"{session_perm_dir}/{collab_session_owner}.perm"
-
-    if not os.path.isfile(perm_file_path):
-        return {"message": f"Permission file '{perm_file_path}' does not exist."}, 404
-
-    try:
-        # Read all lines from the permission file
-        with open(perm_file_path, 'r') as file:
-            lines = file.readlines()
-
-        # Initialize flags and variables
-        permissions_section = False
-        permission_exists = False
-        new_lines = []
-
-        # Traverse each line to find the [permissions] section and check for existing permission
-        for line in lines:
-            new_lines.append(line)
-            if line.strip() == "[permissions]":
-                permissions_section = True
-                continue  # Move to the next line after [permissions]
-            if permissions_section:
-                # Check if the permission already exists
-                if line.strip() == f"{collab_add_username} allow display":
-                    permission_exists = True
-                    permissions_section = False  # Exit permissions section after checking
-                elif line.strip().startswith('['):
-                    # If another section starts, exit permissions section
-                    permissions_section = False
-
-        # If permission does not exist, append it to the [permissions] section
-        if not permission_exists:
-            # Find the index to insert the new permission
-            for idx, line in enumerate(new_lines):
-                if line.strip() == "[permissions]":
-                    insert_idx = idx + 1
-                    break
-            else:
-                # If [permissions] section not found, append it at the end
-                new_lines.append("\n[permissions]\n")
-                insert_idx = len(new_lines)
-
-            # Insert the new permission
-            new_lines.insert(insert_idx, f"{collab_add_username} allow display\n")
-
-            # Write the updated lines back to the file
-            with open(perm_file_path, 'w') as file:
-                file.writelines(new_lines)
-
-        else:
-            # Permission already exists; no need to modify the file
-            return {"message": f"Permission for '{collab_add_username}' already exists."}, 200
-
-        # Execute the command to set permissions
-        command = [
-            "sudo",
-            "-u",
-            "dcv",
-            "dcv",
-            "set-permissions",
-            "--session",
-            collab_session_name,
-            "--file",
-            perm_file_path
-        ]
-
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-        if result.returncode != 0:
-            return {"message": f"Error executing set-permissions: {result.stderr.strip()}", "stderr": result.stderr}, 500
-
-        return {"message": f"Added permission for '{collab_add_username}' successfully.", "stdout": result.stdout}, 200
-
-    except Exception as e:
-        return {"message": f"Error adding permission: {str(e)}", "stderr": str(e)}, 500
-    
 def create_permission_file():
     collab_owner_username = request.args.get('collab_owner_username')
     collab_session_name = request.args.get('collab_session_name')
-    response, status_code = handle_create_permission_file(collab_owner_username, collab_session_name)
+    response, status_code = manage_permission_file(collab_session_owner, collab_session_name, overwrite=True)
     return jsonify(response), status_code
 
 def add_permission():
     collab_owner_username = request.args.get('collab_owner_username')
     collab_session_name = request.args.get('collab_session_name')
     collab_add_username = request.args.get('collab_add_username')
-    response, status_code = handle_add_permission(collab_owner_username, collab_session_name, collab_add_username)
+    new_line = f"{collab_add_username} allow display"
+    response, status_code = manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=new_line)
     return jsonify(response), status_code
 
 @app.route('/remove-permission', methods=['POST'])
@@ -266,73 +224,94 @@ def remove_permission():
 def approve_login():
     try:
         collab_session_owner = request.args.get('collab_session_owner')
+        collab_session_name = request.args.get('session_id', '').strip()
         collab_username = request.args.get('collab_username')
+        number_of_connections = int(request.args.get('number_of_connections'))
 
-        if not collab_session_owner or not collab_username:
-            return create_response("Missing 'collab_session_owner' or 'collab_username' in request.", return_code=400)
+        if not collab_session_owner or not collab_username or not number_of_connections:
+            return create_response("Missing 'collab_session_owner' or 'collab_username' or 'number_of_connections' in request.", return_code=400)
 
         # Path to the send_prompt.sh script
-        script_path = "/usr/bin/dcv_collab_prompt"  # Update this path accordingly
+        script_perm_prompt_path = "/usr/bin/dcv_collab_prompt"  # Update this path accordingly
 
         # Ensure the script exists
-        if not os.path.isfile(script_path):
+        if not os.path.isfile(script_perm_prompt_path):
             return create_response("Approval script not found on server.", return_code=500)
 
         # Set timeout in seconds
         settings = read_settings_conf()
         timeout = settings.get('dcv_collab_prompt_timeout', '')
-        collab_session_name = settings.get('dcv_collab_session_name', '').strip()
+        session_auto_creation_by_dcv = settings.get('session_auto_creation_by_dcv', '').strip()
 
         if not is_positive_integer(timeout):
             timeout = 23  # Fallback to default
 
-        if not collab_session_name:
-            # get_first_session returns a tuple: (Flask response, status_code)
-            resp, _ = get_first_session()
-            data = json.loads(resp.get_data(as_text=True))
-            collab_session_name = data.get("message")
+        if session_auto_creation_by_dcv.strip().lower() == "false":
+            if not collab_session_name:
+                # get_first_session returns a tuple: (Flask response, status_code)
+                resp, _ = get_first_session()
+                data = json.loads(resp.get_data(as_text=True))
+                collab_session_name = data.get("message")
 
-        # Use full environment variables
-        env = os.environ.copy()
+            env = os.environ.copy()
+            result = subprocess.run(
+                [script_perm_prompt_path, collab_session_owner, collab_username, str(timeout)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+                shell=False 
+            )
 
-        # Execute the script as the target user
-        # Assumes the Flask app has necessary permissions to execute as other users
-        # You might need to configure sudoers to allow this without password
-        # Execute the script with full path and environment
-        result = subprocess.run(
-            [script_path, collab_session_owner, collab_username, str(timeout)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=env,  # Pass full environment
-            shell=False  # Recommended for security
-        )
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or "Unknown error occurred."
+                return create_response(f"Error executing approval script: {error_msg}", stderr=result.stderr, return_code=500)
 
-        # Check for errors in execution
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() or "Unknown error occurred."
-            return create_response(f"Error executing approval script: {error_msg}", stderr=result.stderr, return_code=500)
+            approval = result.stdout.strip().lower()
 
-        # Parse the script's output
-        approval = result.stdout.strip().lower()
+            if approval == "true":
+                if collab_session_owner == collab_username:
+                    new_line = f"{collab_username} allow bultin"
+                else:
+                    new_line = f"{collab_username} allow display"
+                
+                response, status_code = manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=new_line)
+                if status_code != 200:
+                    return create_response(response["message"], stderr=response.get("stderr", ""), return_code=status_code)
 
-        if approval == "true":
-
-            # Call create_permission_file
-            create_perm_response, create_perm_status = handle_create_permission_file(collab_session_owner, collab_session_name)
-            if create_perm_status != 200:
-                return create_response(create_perm_response["message"], stderr=create_perm_response.get("stderr", ""), return_code=create_perm_status)
-
-            # Call add_permission
-            add_perm_response, add_perm_status = handle_add_permission(collab_session_owner, collab_session_name, collab_username)
-            if add_perm_status != 200:
-                return create_response(add_perm_response["message"], stderr=add_perm_response.get("stderr", ""), return_code=add_perm_status)
-
-            # If both operations are successful
-            return create_response(True, return_code=200)
+                return create_response(True, return_code=200)
+            else:
+                return create_response(False, return_code=200)
         else:
-            return create_response(False, return_code=200)
+            env = os.environ.copy()
 
+            result = subprocess.run(
+                [script_perm_prompt_path, collab_session_owner, collab_username, str(timeout)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env, 
+                shell=False
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or "Unknown error occurred."
+                return create_response(f"Error executing approval script: {error_msg}", stderr=result.stderr, return_code=500)
+
+            approval = result.stdout.strip().lower()
+
+            if approval == "true":
+                if number_of_connections > 0:
+                    new_line = f"{collab_username} allow display"
+                else:
+                    new_line = f"{collab_username} allow builtin"
+                
+                response, status_code = manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=new_line)
+
+            if status_code != 200:
+                return create_response(response["message"], stderr=response.get("stderr", ""), return_code=status_code)
+            else:
+                return create_response(True, return_code=200)
     except Exception as e:
         return create_response({"error": str(e)}, stderr=str(e), return_code=500)
     
@@ -342,6 +321,8 @@ def check_collab_settings():
         settings = read_settings_conf()
         dcv_collab = settings.get('dcv_collab', '').lower()
         dcv_collab_session_name = settings.get('dcv_collab_session_name', '').strip()
+        dcv_collab_session_type = settings.get('session_type', '').strip()
+        session_auto_creation_by_dcv = settings.get('session_auto_creation_by_dcv', '').strip()
 
         if dcv_collab == 'true':
             # Check if the session exists
@@ -355,9 +336,9 @@ def check_collab_settings():
                     dcv_collab_session_name = data.get("message")
 
                 if dcv_collab_session_name:
-                    return create_response({"collab_enabled": True, "session_name": dcv_collab_session_name})
+                    return create_response({"collab_enabled": True, "session_name": dcv_collab_session_name, "session_type": dcv_collab_session_type, "session_auto_creation_by_dcv": session_auto_creation_by_dcv})
                 else:
-                    return create_response({"collab_enabled": True, "session_name": None})
+                    return create_response({"collab_enabled": True, "session_name": None, "session_type": dcv_collab_session_type, "session_auto_creation_by_dcv": session_auto_creation_by_dcv})
         else:
             return create_response({"collab_enabled": False})
     except Exception as e:
@@ -388,7 +369,30 @@ def get_session_owner():
     
     except Exception as e:
         return create_response({"error": str(e)}, stderr=str(e), return_code=500)
+
+@app.route('/collab-set-session-owner', methods=['POST'])
+def collab_set_session_owner():
+    global collab_session_owner
+    session_id = request.args.get('session_id')
+    session_owner = request.args.get('session_owner')
+
+    if not session_id and not session_owner:
+        return create_response("Missing owner or session_owner parameter.", return_code=400)
+
+    collab_session_owner = session_owner.strip()
+
+    response, status_code = manage_permission_file(collab_session_owner, session_id, overwrite=True)
     
+    return create_response(
+        {"collab_session_owner": collab_session_owner, "file_response": response["message"]},
+        return_code=status_code
+    )
+
+@app.route('/collab-get-session-owner', methods=['GET'])
+def collab_get_session_owner():
+    global session_count_by_owner
+    return create_response({"collab_session_owner": collab_session_owner}, return_code=200)
+
 @app.route('/request_token', methods=['POST'])
 def execute_ssh_command():
     data = request.get_json()
@@ -445,8 +449,8 @@ def create_session():
     owner = request.args.get('owner')
     if not owner:
         return create_response("Missing owner parameter. Please specify owner in the query string.", return_code=400)
-    response = count_sessions(owner) # tuple: json, http code
-    data = response[0] # json part
+    response = count_sessions(owner)
+    data = response[0]
     data_parsed = json.loads(data.get_data(as_text=True))
     owner_count = int(data_parsed["message"])
     session_type = get_session_type()
@@ -600,9 +604,27 @@ def get_list_sessions():
     except Exception as e:
         return create_response("Error: Failed to run 'dcv list-sessions'", stderr=str(e), return_code=500)
 
+@app.route('/list-sessions-json', methods=['GET'])
+def get_list_sessions_json():
+    try:
+        command = " ".join(["dcv", "list-sessions", "--json"])
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+        output, error = process.communicate()
+        output = output.decode("utf-8")
+        error = error.decode("utf-8")
+
+        try:
+            json_output = json.loads(output)
+        except json.JSONDecodeError:
+            return create_response("Error: Failed to parse JSON output", stderr="Invalid JSON format", return_code=500)
+
+        return create_response(json_output, stdout=output, stderr=error, return_code=200)
+    except Exception as e:
+        return create_response("Error: Failed to run 'dcv list-sessions'", stderr=str(e), return_code=500)
+
 @app.route('/', methods=['GET'])
 def get_data():
     return create_response("This is an API used to manage your DCV services.")
 
 if __name__ == '__main__':
-    app.run(debug=False)  # Set debug=False for production
+    app.run(debug=False)
