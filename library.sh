@@ -95,6 +95,7 @@ createSettingsFile()
     then
     cat <<EOF | sudo tee $dcv_management_file_conf_path
 session_type=virtual
+session_auto_creation_by_dcv=false
 dcv_collab=false
 dcv_collab_prompt_timeout=20
 dcv_collab_session_name=
@@ -111,24 +112,32 @@ copyPythonApp()
 
 setupRedhatPackages()
 {
-    sudo yum -y install python3-pip
-    sudo pip3 install --upgrade pip
+    sudo yum -y install python38 python38-pip jq
+    sudo pip3.8 install --upgrade pip
 }
 
 setupUbuntuPackages()
 {
     sudo apt update
-    sudo apt -y install python3-pip
+    sudo apt -y install python3.8 python3-pip jq
     sudo pip3 install --upgrade pip 
 }
 
 setupPythonRequiredLibraries()
 {
-    # install required libraries
-    sudo pip3 install --upgrade pip
-    sudo pip3 install Flask --ignore-installed -U blinker
-    sudo pip3 install --upgrade setuptools
-    sudo pip3 install paramiko
+    if command -v pip3.8 &> /dev/null
+    then
+        sudo pip3.8 install --upgrade pip
+        sudo pip3.8 install Flask --ignore-installed -U blinker
+        sudo pip3.8 install --upgrade setuptools
+        sudo pip3.8 install paramiko
+
+    else
+        sudo pip3 install --upgrade pip
+        sudo pip3 install Flask --ignore-installed -U blinker
+        sudo pip3 install --upgrade setuptools
+        sudo pip3 install paramiko
+    fi
 }
 
 setAuthTokenVerifier()
@@ -228,7 +237,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/dcv_api
-ExecStart=/usr/bin/python3 /opt/dcv_api/app.py
+ExecStart=/usr/bin/python3.8 /opt/dcv_api/app.py
 Restart=always
 
 [Install]
