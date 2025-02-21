@@ -307,11 +307,17 @@ def approve_login():
                     new_line = f"{collab_username} allow builtin"
                 
                 response, status_code = manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=new_line)
-
-            if status_code != 200:
-                return create_response(response["message"], stderr=response.get("stderr", ""), return_code=status_code)
+                if status_code != 200:
+                    return create_response(
+                        response["message"],
+                        stderr=response.get("stderr", ""),
+                        return_code=status_code
+                    )
+                else:
+                    return create_response(True, return_code=200)
             else:
-                return create_response(True, return_code=200)
+                return create_response(False, return_code=200)
+            
     except Exception as e:
         return create_response({"error": str(e)}, stderr=str(e), return_code=500)
     
