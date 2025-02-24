@@ -18,7 +18,8 @@ def read_settings_conf():
         "session_type": "virtual",
         "dcv_collab": "false",
         "session_auto_creation_by_dcv": "false",
-        "dcv_cllab_prompt_timeout": 20,
+        "session_timeout": 3600,
+        "dcv_collab_prompt_timeout": 20,
         "dcv_collab_session_name": "",
         "dcv_collab_sessions_permissions_dir": "/etc/dcv-management/sessions-permissions.d"
     }
@@ -475,29 +476,21 @@ def create_session():
         return create_response("already exist.", stdout=f"Count: {owner_count}", return_code=500)
 
 @app.route('/close-session', methods=['GET'])
-def close_session(owner=None):
-    owner = request.args.get('owner')
-    if not owner:
-        return create_response("Missing owner parameter. Please specify owner in the query string.", return_code=400)
-    
-    response = count_sessions(owner) # tuple: json, http code
-    data = response[0] # json part
-    data_parsed = json.loads(data.get_data(as_text=True))
-    owner_count = int(data_parsed["message"])
+def close_session(session_id=None):
+    session_id = request.args.get('session_id')
+    if not session_id:
+        return create_response("Missing session_id parameter. Please specify session_id in the query string.", return_code=400)
 
-    if owner_count > 0:
-        command = " ".join(["dcv", "close-session", owner])
-        try:
-            process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-            output, error = process.communicate()
-            if process.returncode == 0:
-                return create_response("closed", stdout=output.decode(), stderr=error.decode())
-            else:
-                return create_response("Error: Failed to run close-session", stdout=output.decode(), stderr=error.decode(), return_code=500)
-        except Exception as e:
-            return create_response("Error: Failed to run close-session", stderr=str(e), return_code=500)
-    else:
-        return create_response("No session found to be closed.")
+    command = " ".join(["dcv", "close-session", session_id])
+    try:
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+        output, error = process.communicate()
+        if process.returncode == 0:
+            return create_response("closed", stdout=output.decode(), stderr=error.decode())
+        else:
+            return create_response("Error: Failed to run close-session", stdout=output.decode(), stderr=error.decode(), return_code=500)
+    except Exception as e:
+        return create_response("Error: Failed to run close-session", stderr=str(e), return_code=500)
 
 @app.route('/list-connections', methods=['GET'])
 def list_connections(owner=None):
@@ -515,11 +508,28 @@ def list_connections(owner=None):
         return create_response("Error: Failed to list connections", stderr=str(e), return_code=500)
 
 @app.route('/check-session-timedout', methods=['GET'])
-def check_session_timedout(owner=None):
-    owner = request.args.get('owner')
-    if not owner:
-        return create_response("Missing owner parameter. Please specify owner in the query string.", return_code=400)
-    command= " ".join(["dcv", "describe-session", owner, "--json"])
+def check_session_timedout(session_id=None):
+    session_id = request.args.get('session_id')
+
+    settings = read_settings_conf()
+    session_timeout = int(settings.get('session_timeout', ''))
+
+    # fallback value, disabling the timedout check
+    if not session_timeout:
+        session_timeout = 0
+
+    if session_timeout == 0:
+        return create_response(
+            "Session timedout check is disabled because session_timeout is equal zero.",
+            stdout=f"Inactive duration: {inactive_duration} seconds",
+            stderr=error
+        )
+
+    if not session_id:
+        return create_response("Missing session_id parameter. Please specify owner in the query string.", return_code=400)
+    
+    command= " ".join(["dcv", "describe-session", session_id, "--json"])
+
 
     try:
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
@@ -527,50 +537,65 @@ def check_session_timedout(owner=None):
         output = output.decode("utf-8")
         error = error.decode("utf-8")
 
-        if process.returncode == 0:
-            data = json.loads(output)
-            num_connections = data["num-of-connections"]
-            creation_time_str = data["creation-time"]
-            disconnection_time_str = data["last-disconnection-time"]
-            if not disconnection_time_str:
-                disconnection_time_str = data["creation-time"]
-            format_string = "%Y-%m-%dT%H:%M:%S.%fZ"
-            creation_time = datetime.strptime(creation_time_str, format_string)
-            disconnection_time = datetime.strptime(disconnection_time_str, format_string)
-            time_difference = disconnection_time - creation_time
-            difference_in_seconds = time_difference.total_seconds()
-
-            if num_connections == 0:
-                if difference_in_seconds > 1800:
-                    response = close_session(owner)
-                    return response
-                else:
-                    return create_response("There are no users connected, but the time to timeout did not reach yet.", stdout=output, stderr=error)
-            else:
-                return create_response("There are users still connected under DCV session.", stdout=output, stderr=error)
-        else:
+        if process.returncode != 0:
             return create_response("Error: Failed to describe session", stdout=output, stderr=error, return_code=500)
+
+        data = json.loads(output)
+        num_connections = data.get("num-of-connections", 0)
+        creation_time_str = data.get("creation-time")
+        disconnection_time_str = data.get("last-disconnection-time")
+
+        # Use disconnection time if available; otherwise, use creation time as fallback.
+        last_activity_str = disconnection_time_str if disconnection_time_str else creation_time_str
+        
+        # define the time format string
+        format_string = "%Y-%m-%dT%H:%M:%S.%fZ"
+        last_activity = datetime.strptime(last_activity_str, format_string)
+        
+        # Calculate inactivity using the current time
+        current_time = datetime.utcnow()
+        inactive_duration = (current_time - last_activity).total_seconds()
+
+        if num_connections == 0:
+            if inactive_duration > session_timeout:
+                return close_session(session_id)
+            else:
+                return create_response(
+                    "There are no users connected, but the session has not been inactive long enough.",
+                    stdout=f"Inactive duration: {inactive_duration} seconds",
+                    stderr=error
+                )
+        else:
+            return create_response(
+                "There are users still connected under DCV session.",
+                stdout=output,
+                stderr=error
+            )
     except Exception as e:
         return create_response("Error: Failed to check session timeout", stderr=str(e), return_code=500)
 
 @app.route('/list-sessions-owners', methods=['GET'])
 def list_sessions_owners():
     try:
-        response = get_list_sessions()
-        response_code = response[1]
-        data = response[0]
-        data_parsed_json = json.loads(data.get_data(as_text=True))
-        message = data_parsed_json["message"]
-        lines = message.splitlines()
+        # Call get_list_sessions_json to get the sessions as JSON.
+        response, status_code = get_list_sessions_json()
+        if status_code != 200:
+            return response, status_code
+
+        # Parse the response data to extract the list of sessions.
+        data = json.loads(response.get_data(as_text=True))
+        sessions = data.get("message", [])
+        
+        # Extract the "owner" value from each session.
         owners = []
-        for line in lines:
-            parts = line.split()
-            owners.append(parts[1].strip("'"))
-        return create_response(owners, stdout=json.dumps(owners))
+        for session in sessions:
+            owner = session.get("owner")
+            if owner:
+                owners.append(owner)
+
+        return create_response(owners, stdout=json.dumps(owners), return_code=200)
     except Exception as e:
         return create_response("Error: Failed to list session owners", stderr=str(e), return_code=500)
-
-import re
 
 @app.route('/get-first-session', methods=['GET'])
 def get_first_session():

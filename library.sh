@@ -96,6 +96,7 @@ createSettingsFile()
     cat <<EOF | sudo tee $dcv_management_file_conf_path
 session_type=virtual
 session_auto_creation_by_dcv=false
+session_timeout=3600
 dcv_collab=false
 dcv_collab_prompt_timeout=20
 dcv_collab_session_name=
