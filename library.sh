@@ -248,10 +248,10 @@ EOF
     # create the dcv_local_sessions_timedout script
     cat <<EOF | sudo tee /usr/bin/dcv_local_sessions_timedout
 #!/bin/bash
-session_owner_list=\$(curl -s http://localhost:5000/list-sessions-owners | grep -Eo '"([^"]+)"' | cut -d '"' -f2 | grep -iv message)
-for owner in \$session_owner_list
+session_list=\$(curl -s http://localhost:5000/list-sessions-json | jq -r '.message[] | .id' | paste -sd " " )
+for session_id in \$session_list
 do
-	curl -s http://localhost:5000/check-session-timedout?owner=\$owner &> /dev/null
+	curl -s http://localhost:5000/check-session-timedout?session_id=\$session_id &> /dev/null
 done
 EOF
 
