@@ -90,10 +90,7 @@ createDirectories()
 
 createSettingsFile()
 {
-    # do not create the file again if already exist
-    if [ ! -f $dcv_management_file_conf_path ]
-    then
-    cat <<EOF | sudo tee $dcv_management_file_conf_path
+     cat <<EOF | sudo tee $dcv_management_file_conf_path_scheme
 session_type=virtual
 session_auto_creation_by_dcv=false
 session_timeout=3600
@@ -102,6 +99,41 @@ dcv_collab_prompt_timeout=20
 dcv_collab_session_name=
 dcv_collab_sessions_permissions_dir=/etc/dcv-management/sessions-permissions.d
 EOF
+   
+    # do not create the file again if already exist
+    if [ ! -f $dcv_management_file_conf_path ]
+    then
+        sudo cp -a $dcv_management_file_conf_path_scheme $dcv_management_file_conf_path
+    else
+        timestamp=$(date +"%Y%m%d_%H%M%S")
+        backup_file="${dcv_management_file_conf_path}.${timestamp}"
+        sudo cp -a $dcv_management_file_conf_path $backup_file
+
+        # Loop through each non-empty line in the default file
+        while IFS= read -r line || [ -n "$line" ]
+        do
+
+            # Skip empty lines or lines without an '=' sign
+            if [[ -z "$line" || "$line" != *"="* ]]
+            then
+                continue
+            fi
+
+            # Remove any comments at the beginning if needed (optional)
+            # Uncomment the below to skip commented lines starting with '#' if applicable
+            # [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+            # Extract key: get part before the first '=' and trim surrounding spaces
+            key=$(echo "$line" | sed 's/ *=.*//; s/^[[:space:]]*//; s/[[:space:]]*$//')
+
+            # Check if the key already exists in the user file (ignoring spaces around key)
+            if ! grep -Eq "^[[:space:]]*${key}[[:space:]]*=" "$dcv_management_file_conf_path"
+            then
+                echo "Adding missing setting: $line"
+                echo "$line" | sudo tee -a "$dcv_management_file_conf_path" >/dev/null
+            fi
+        done < "$dcv_management_file_conf_path_scheme"
+        
     fi
 }
 
