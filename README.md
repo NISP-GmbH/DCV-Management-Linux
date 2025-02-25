@@ -1,18 +1,21 @@
-# Dynamic DCV Sessions
+# Dynamic DCV Sessions and permissions
 
-The standard approach for NICE DCV Console sessions is to have a session statically created for a specific user. In some cases it is preferred to enable users to connect to NICE DCV and dynamically be able to use the DCV Console Session without installing and configuring the [DCV Session Manager](https://docs.aws.amazon.com/dcv/latest/sm-admin/what-is-sm.html).
+The standard approach for NICE DCV sessions is to have a session statically created for a specific user during the DCV Server start.
 
-Below we show 2 approaches for managing console sessions - based on permissions and a more controlled via a Python API server
+There are some specific cases that you need dynamically create and close sessions or change the session permissions based in some rules.
 
-## Always on Console session, permissions for all and only one connection allowed
+There are some ways to create and manage sessions permissions.
+1. Create static session (DCV default config) and configure the default.perm file to allow one or more users/groups to access the session (DCV session takeover).
+2. Create and close manually the sessions, and then set the permissions, using command line.
+3. Use DCV Management Linux to manage the session: Auto session creation during user login, for Virtual sessions, or automatically permission changes (aka Collaboration session) for Console sessions.
 
-To implement this we automatically create a console sessions for a specific standard user and set the maximal number of connection to the DCV console session to 1 so no other user can connect and allow all users to connect to the session in the permissions file. The guide to implement this approach is here: https://www.ni-sp.com/nice-dcv-dynamic-console-sessions/
+## DCV Dynamic sessions by DCV configuration
 
-In addition we can use commands to logout the user actively after timeout - we need to be aware that there could be open files without unsaved work in the session:
-* sudo loginctl terminate-user $USER
-* gnome-session-quit --no-prompt
+The guide to implement this approach is here: https://www.ni-sp.com/nice-dcv-dynamic-console-sessions/
 
-## DCV Management Python API Server to manage DCV virtual and console sessions
+## DCV Management Linux
+
+This solution implement a Python service that can manage the DCV Server resources to make possible some customizations.
 
 The DCV Management service is currently capable to do:
 * Request token access to access your session using SSH service
@@ -35,17 +38,53 @@ Advantages of the local Python HTTP API:
 * Python Flask was used to write the API; Simple library (does not depend of other libraries), where we can write a very simple code, spending more time in the company solutions than in library syntax. ref: https://flask.palletsprojects.com/en/3.0.x/quickstart/
 * The Python code is organized due the mandatory indentation. Also is simple, so anyone can read and understand, besides the syntax. Also, AI's like ChatGPT, Gemini etc are very efficient to understand Python code. Also Python is a base language for many distros, like Bash and Perl.
 
+### Collaboration session
+
+To enable the feature, you need to edit /etc/dcv-management/settings.conf and enable:
+
+```bash
+session_type=virtual
+dcv_collab=true
+```
+
+* session_type : virtual or console
+* dcv_collab : true or false
+
+Additional and optional parameters:
+```bash
+dcv_collab_prompt_timeout=20 
+dcv_collab_session_name=
+dcv_collab_sessions_permissions_dir=/etc/dcv-management/sessions-permissions.d
+```
+
+Explaining:
+* dcv_collab : (true|false) Will enable or disable the collaboration feature
+* session_type : (console|virtual) the type of the session that will use collab feature.
+* dcv_collab_prompt_timeout : the timeout (in seconds) to wait session owner approval before automatically deny the user access
+* dcv_collab_session_name : you can set the name of the session that will use collab feature. If you do not set, it will use the first session according "dcv list-sessions" command.
+* dcv_collab_sessions_permissions_dir : where will be stored the approved users for that session. You can safely remove any files, the API service will create again when needed.
+
+How collaboration session works:
+If the type is console session, the first to connect into the session will be the session owner with all session features. If an additional user try to login, the session owner will be requested to approve or deny. If approved, the user will have just the display (screen share) feature enabled.
+
 ### Supported Operating Systems
 
 - RedHat based Linux distros (7, 8 and 9): CentOS, CentOS Stream, RockyLinux and AlmaLinux
 - Ubuntu 18.04, 20.04, 22.04 and 24.04
 
-### Installing DCV Managament API Service
+### Installing DCV Managament Linux
 ```
 bash install.sh
 ```
 
-### Uninstall DCV Management API Service
+### Updating DCV Managament Linux
+```
+bash install.sh
+```
+
+**Note:** settings.conf will be preserver and eventually merged if there are new parameters. Before that a backup will be created inside of /etc/dcv-management/.
+
+### Uninstall DCV Management Linux
 ```
 bash uninstall.sh
 ```
@@ -75,34 +114,6 @@ curl -s http://localhost:5000/create-session?owner=centos
 ```
 curl -s http://localhost:5000/list-sessions-owners
 ```
-
-## DCV Collaboration mode
-
-With the Collaboration mode you can share your session (session owner) with other users (without control). A request approval window will appear in the session owner to Approve or Deny the user to see the session.
-
-If the session owner disconnect by any reason, and if the session is still alive, the collab users will see a black window until the session owner connect again, sharing the screen again.
-
-To enable the feature, you need to edit the file /etc/dcv-management/settings.conf and set:
-
-```bash
-dcv_collab=true
-```
-
-Note: Currently only one session (console or virtual) will support the collab feature.
-
-Other possible settings:
-
-```bash
-session_type=console
-dcv_collab_prompt_timeout=20
-dcv_collab_session_name=
-dcv_collab_sessions_permissions_dir=/etc/dcv-management/sessions-permissions.d
-```
-
-* session_type : (console|virtual) the type of the session that will use collab feature
-* dcv_collab_prompt_timeout : the timeout to wait session owner approval before automatically deny the user access
-* dcv_collab_session_name : you can set the name of the session that will use collab feature. If you do not set, it will use the first session according "dcv list-sessions" command.
-* dcv_collab_sessions_permissions_dir : where will be stored the approved users for that session. You can safely remove any files, the API service will create again when needed.
 
 ## DCV Dynamic Session Creation
 
