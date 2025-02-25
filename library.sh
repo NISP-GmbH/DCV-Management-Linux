@@ -1,3 +1,44 @@
+checkPythonVersion() {
+    if command -v python3 &>/dev/null
+    then
+        version_output=$(python3 --version 2>&1)
+        # Expected output format: "Python X.Y.Z"
+        version=$(echo "$version_output" | awk '{print $2}')
+        major=$(echo "$version" | cut -d. -f1)
+        minor=$(echo "$version" | cut -d. -f2)
+
+        if [ "$major" -eq "3" ] && [ "$minor" -ge "8" ]
+        then
+            echo "Python version $version is installed and meets the requirement (>=3.8)."
+            python3_bin="python3"
+            return 0
+        else
+            echo "Installed Python version ($version) is less than 3.8."
+            echo "Looking for additional python versions..."
+            for ver in {8..13}
+            do
+                cmd="python3.$ver"
+                if command -v "$cmd" &> /dev/null
+                then
+                    echo "Found: $cmd -> $("$cmd" --version)"
+                    python3_bin=$cmd
+                fi
+            done
+            if [[ "${python3_bin}x" != "x" ]]
+            then
+                echo "Using the python >>> $python3_bin <<<."
+                return 0
+            else
+                echo "Did not find an alternative Python."
+                return 1
+            fi
+        fi
+    else
+        echo "Python3 is not installed."
+        return 2
+    fi
+}
+
 checkLinuxDistro()
 {
     echo "If you know what you are doing, please use --force option to avoid our Linux Distro compatibility test."
@@ -145,32 +186,23 @@ copyPythonApp()
 
 setupRedhatPackages()
 {
-    sudo yum -y install python38 python38-pip jq
-    sudo pip3.8 install --upgrade pip
+    sudo yum -y install python3-pip jq
+    sudo pip3 install --upgrade pip
 }
 
 setupUbuntuPackages()
 {
     sudo apt update
-    sudo apt -y install python3.8 python3-pip jq
+    sudo apt -y install python3-pip jq
     sudo pip3 install --upgrade pip 
 }
 
 setupPythonRequiredLibraries()
 {
-    if command -v pip3.8 &> /dev/null
-    then
-        sudo pip3.8 install --upgrade pip
-        sudo pip3.8 install Flask --ignore-installed -U blinker
-        sudo pip3.8 install --upgrade setuptools
-        sudo pip3.8 install paramiko
-
-    else
-        sudo pip3 install --upgrade pip
-        sudo pip3 install Flask --ignore-installed -U blinker
-        sudo pip3 install --upgrade setuptools
-        sudo pip3 install paramiko
-    fi
+    sudo pip3 install --upgrade pip
+    sudo pip3 install Flask --ignore-installed -U blinker
+    sudo pip3 install --upgrade setuptools
+    sudo pip3 install paramiko
 }
 
 setAuthTokenVerifier()
@@ -270,7 +302,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/dcv_api
-ExecStart=/usr/bin/python3.8 /opt/dcv_api/app.py
+ExecStart=/usr/bin/${python3_bin} /opt/dcv_api/app.py
 Restart=always
 
 [Install]
