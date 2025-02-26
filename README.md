@@ -72,10 +72,21 @@ If the type is console session, the first to connect into the session will be th
 - RedHat based Linux distros (7, 8 and 9): CentOS, CentOS Stream, RockyLinux and AlmaLinux
 - Ubuntu 18.04, 20.04, 22.04 and 24.04
 
+
 ### Installing DCV Managament Linux
 ```
 bash install.sh
 ```
+
+If you intend to install in a server that has no connection with internet here are some tips:
+* Download the python packages to setup in the same server (please use the same python major version to execute pip3 commands).
+```bash
+# to download the python packages
+pip3 download -r python_requirements.txt -d ./offline_packages
+# to install the python packages
+pip3 install ./offline_packages/*.whl
+```
+* If the server has a python lower than 3.8, you need to mount a local media or repository that will offer python3.8+ version to be installed.
 
 ### Updating DCV Managament Linux
 ```
