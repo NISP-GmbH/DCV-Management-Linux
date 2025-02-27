@@ -16,9 +16,30 @@ fi
 
 # check if collab feature is enabled
 curl_result=$(curl -s http://${hostname}:${port}/check-collab-settings 2> /dev/null)
+
+if [[ "${curl_result}x" == x ]]
+then
+    exit 12
+fi
+
 collab_enabled=$(echo "$curl_result" | jq -r '.message.collab_enabled')
 session_type=$(echo "$curl_result" | jq -r '.message.session_type')
 session_auto_creation_by_dcv=$(echo $curl_result | jq -r '.message.session_auto_creation_by_dcv')
+
+if ! echo $collab_enabled | egrep -iq "(true|false)"
+then
+    exit 13
+fi
+
+if ! echo $session_type | egrep -iq "(true|false)"
+then
+    exit 17
+fi
+
+if ! echo $session_auto_creation_by_dcv | egrep -iq "(true|false)"
+then
+    exit 16
+fi
 
 # if enabled, and the dcv server auto creation is enabled
 if echo $collab_enabled | egrep -iq "true"
@@ -155,3 +176,6 @@ then
         fi
     fi
 fi
+
+# unknown error, do not authorize
+exit 255
