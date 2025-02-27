@@ -86,7 +86,7 @@ then
                 then
                     exit 0
                 else
-                    exit 15
+                    exit 18
                 fi
             fi
         fi
@@ -172,7 +172,7 @@ then
         then
             exit 0
         else
-            exit 1
+            exit 2
         fi
     fi
 fi
