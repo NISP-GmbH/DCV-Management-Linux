@@ -155,7 +155,24 @@ then
             exit 0
         # and the user is not the collab session owner
         else
-            curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?collab_session_owner=${collab_session_owner}&collab_username=${username}")
+            # get the id of the session created by DCV
+            curl_result=$(curl -s http://${hostname}:${port}/list-sessions-json)
+            session_id=$(echo "$curl_result" | jq -r '.message[0].id')
+
+            # Verify that an id was indeed extracted
+            if [ -z "$session_id" ] || [ "$session_id" = "null" ]
+            then
+                echo "Error: session id not found in JSON output." >&2
+                exit 21
+            fi
+
+            number_of_connections=$(echo "$curl_result" | jq -r '.message[0]["num-of-connections"]')
+            if [ -z "$number_of_connections" ] || [ "$number_of_connections" = "null" ]
+            then
+                echo "Error: number_of_connections not found in JSON output." >&2
+               exit 22
+            fi
+            curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?collab_session_owner=${collab_session_owner}&collab_username=${username}&number_of_connections=$number_of_connections&session_id=${session_id}")
             approval=$(echo "$curl_result" | jq -r ".message")
 
             if echo $approval | egrep -iq "true"
