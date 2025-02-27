@@ -186,23 +186,21 @@ copyPythonApp()
 
 setupRedhatPackages()
 {
-    sudo yum -y install python3-pip jq
-    sudo pip3 install --upgrade pip
+    sudo yum -y install ${python3_bin}-pip jq
 }
 
 setupUbuntuPackages()
 {
     sudo apt update
-    sudo apt -y install python3-pip jq
-    sudo pip3 install --upgrade pip 
+    sudo apt -y install ${python3_bin}-pip jq
 }
 
 setupPythonRequiredLibraries()
 {
-    sudo pip3 install --upgrade pip
-    sudo pip3 install Flask --ignore-installed -U blinker
-    sudo pip3 install --upgrade setuptools
-    sudo pip3 install paramiko
+    sudo "${python3_bin}" -m pip install --upgrade pip
+    sudo "${python3_bin}" -m pip install Flask --ignore-installed -U blinker
+    sudo "${python3_bin}" -m pip install --upgrade setuptools
+    sudo "${python3_bin}" -m pip install paramiko
 }
 
 setAuthTokenVerifier()
