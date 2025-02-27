@@ -31,7 +31,7 @@ then
     exit 13
 fi
 
-if ! echo $session_type | egrep -iq "(true|false)"
+if ! echo $session_type | egrep -iq "(console|virtual)"
 then
     exit 17
 fi
