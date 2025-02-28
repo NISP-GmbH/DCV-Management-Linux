@@ -22,9 +22,18 @@ then
     exit 12
 fi
 
+for string_expected in collab_enabled session_type session_auto_creation_by_dcv
+do
+    if ! echo $curl_result | egrep -iq "$string_expected"
+    then
+        exit 19
+    fi
+done
+
 collab_enabled=$(echo "$curl_result" | jq -r '.message.collab_enabled')
 session_type=$(echo "$curl_result" | jq -r '.message.session_type')
 session_auto_creation_by_dcv=$(echo $curl_result | jq -r '.message.session_auto_creation_by_dcv')
+
 
 if ! echo $collab_enabled | egrep -iq "(true|false)"
 then
