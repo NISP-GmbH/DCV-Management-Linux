@@ -336,7 +336,7 @@ def check_collab_settings():
         if dcv_collab == 'true':
             # Check if the session exists
             if session_exists(dcv_collab_session_name):
-                return create_response({"collab_enabled": True, "session_name": dcv_collab_session_name})
+                return create_response({"collab_enabled": True, "session_name": dcv_collab_session_name, "session_type": dcv_collab_session_type, "session_auto_creation_by_dcv": session_auto_creation_by_dcv})
             else:
                 if not dcv_collab_session_name:
                     # get_first_session returns a tuple: (Flask response, status_code)
