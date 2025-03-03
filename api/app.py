@@ -49,12 +49,19 @@ def read_settings_conf():
     except Exception as e:
         print(f"Error reading settings.conf: {e}. Using default fallback values.")
     return settings
+
 def manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=None, overwrite=False):
     settings = read_settings_conf()
     session_perm_dir = settings.get('dcv_collab_sessions_permissions_dir', '')
-    if not session_perm_dir:
-        return {"message": "Session permissions directory is not configured."}, 500
 
+    if not session_perm_dir:
+        return create_response(
+            message="Session permissions directory is not configured.",
+            stdout=None,
+            stderr=None,
+            return_code=500
+        )
+    
     perm_file_path = os.path.join(session_perm_dir, f"{collab_session_name}.perm")
     created = False
 
@@ -117,10 +124,21 @@ def manage_permission_file(collab_session_owner, collab_session_name, new_permis
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     if result.returncode != 0:
-        return {"message": f"Error executing set-permissions: {result.stderr.strip()}"}, 500
+        return create_response(
+        message="Error executing set-permissions.",
+        stdout=result.stdout,
+        stderr=result.stderr,
+        return_code=200
+        )
 
     action = "created" if created else "updated"
-    return {"message": f"Permission file '{perm_file_path}' {action} successfully."}, 200
+
+    return create_response(
+        message="Permission file '{perm_file_path}' {action} successfully.",
+        stdout=result.stdout,
+        stderr=result.stderr,
+        return_code=200
+        )
 
 def session_exists(session_name):
     try:
@@ -216,12 +234,26 @@ def remove_permission():
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         if result.returncode != 0:
-            return create_response(f"Error executing set-permissions: {result.stderr.strip()}", stderr=result.stderr, return_code=500)
-
-        return create_response(f"Removed permission for '{collab_del_username}' successfully.", stdout=result.stdout, return_code=200)
-
+            return create_response(
+                message="Error executing set-permissions.",
+                stdout=result.stdout,
+                stderr=result.stderr,
+                return_code=500
+                )
+        
+        return create_response(
+            message="Removed permission for '{collab_del_username}' successfully.",
+            stdout=result.stdout,
+            stderr=result.stderr,
+            return_code=200
+        )
     except Exception as e:
-        return create_response(f"Error removing permission: {str(e)}", stderr=str(e), return_code=500)
+        return create_response(
+            message="Command executed",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/approve-login', methods=['POST'])
 def approve_login():
@@ -232,14 +264,24 @@ def approve_login():
         number_of_connections = int(request.args.get('number_of_connections'))
 
         if not collab_session_owner or not collab_username or not number_of_connections:
-            return create_response("Missing 'collab_session_owner' or 'collab_username' or 'number_of_connections' in request.", return_code=400)
+            return create_response(
+                message="Missing 'collab_session_owner' or 'collab_username' or 'number_of_connections' in request.",
+                stdout=None,
+                stderr=None,
+                return_code=400
+            )
 
         # Path to the send_prompt.sh script
         script_perm_prompt_path = "/usr/bin/dcv_collab_prompt"  # Update this path accordingly
 
         # Ensure the script exists
         if not os.path.isfile(script_perm_prompt_path):
-            return create_response("Approval script not found on server.", return_code=500)
+            return create_response(
+                message="Approval script not found on server.",
+                stdout=None,
+                stderr=None,
+                return_code=500
+            )
 
         # Set timeout in seconds
         settings = read_settings_conf()
@@ -267,8 +309,12 @@ def approve_login():
             )
 
             if result.returncode != 0:
-                error_msg = result.stderr.strip() or "Unknown error occurred."
-                return create_response(f"Error executing approval script: {error_msg}", stderr=result.stderr, return_code=500)
+                return create_response(
+                    message="Error executing approval script.",
+                    stdout=result.stdout,
+                    stderr=result.stderr.strip(),
+                    return_code=500
+                )
 
             approval = result.stdout.strip().lower()
 
@@ -280,8 +326,13 @@ def approve_login():
                 
                 response, status_code = manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=new_line)
                 if status_code != 200:
-                    return create_response(response["message"], stderr=response.get("stderr", ""), return_code=status_code)
-
+                    return create_response(
+                        message=response["message"],
+                        stdout=response.get("stdout", ""),
+                        stderr=response.get("stderr", ""),
+                        return_code=status_code
+                    )
+                
                 return create_response(True, return_code=200)
             else:
                 return create_response(False, return_code=200)
@@ -298,8 +349,12 @@ def approve_login():
             )
 
             if result.returncode != 0:
-                error_msg = result.stderr.strip() or "Unknown error occurred."
-                return create_response(f"Error executing approval script: {error_msg}", stderr=result.stderr, return_code=500)
+                return create_response(
+                    message="Error executing approval script.",
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    return_code=500
+                )
 
             approval = result.stdout.strip().lower()
 
@@ -312,7 +367,8 @@ def approve_login():
                 response, status_code = manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=new_line)
                 if status_code != 200:
                     return create_response(
-                        response["message"],
+                        message=response["message"],
+                        stdout=response.get("stdout", ""),
                         stderr=response.get("stderr", ""),
                         return_code=status_code
                     )
@@ -320,9 +376,13 @@ def approve_login():
                     return create_response(True, return_code=200)
             else:
                 return create_response(False, return_code=200)
-            
     except Exception as e:
-        return create_response({"error": str(e)}, stderr=str(e), return_code=500)
+        return create_response(
+            message="Error.",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
     
 @app.route('/check-collab-settings', methods=['GET'])
 def check_collab_settings():
@@ -351,7 +411,12 @@ def check_collab_settings():
         else:
             return create_response({"collab_enabled": False})
     except Exception as e:
-        return create_response({"error": str(e)}, stderr=str(e), return_code=500)
+        return create_response(
+            message="Error.",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/get-session-owner', methods=['GET'])
 def get_session_owner():
@@ -377,8 +442,13 @@ def get_session_owner():
         return create_response(f"Session '{session_name}' not found.", return_code=404)
     
     except Exception as e:
-        return create_response({"error": str(e)}, stderr=str(e), return_code=500)
-
+        return create_response(
+            message="Error.",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
+    
 @app.route('/collab-set-session-owner', methods=['POST'])
 def collab_set_session_owner():
     global collab_session_owner
@@ -393,14 +463,22 @@ def collab_set_session_owner():
     response, status_code = manage_permission_file(collab_session_owner, session_id, overwrite=True)
     
     return create_response(
-        {"collab_session_owner": collab_session_owner, "file_response": response["message"]},
+        message={"collab_session_owner": collab_session_owner, "file_response": response["message"]},
+        stdout=response.get("stdout",""),
+        stderr=response.get("stderr",""),
         return_code=status_code
     )
 
 @app.route('/collab-get-session-owner', methods=['GET'])
 def collab_get_session_owner():
     global session_count_by_owner
-    return create_response({"collab_session_owner": collab_session_owner}, return_code=200)
+
+    return create_response(
+        message={"collab_session_owner": collab_session_owner},
+        stdout=None,
+        stderr=None,
+        return_code=200
+    )
 
 @app.route('/request_token', methods=['POST'])
 def execute_ssh_command():
@@ -428,10 +506,20 @@ def execute_ssh_command():
 
         ssh.close()
 
-        return create_response(output, stdout=output, stderr=error)
+        return create_response(
+            message=output,
+            stdout=output,
+            stderr=error,
+            return_code=None
+        )
 
     except Exception as e:
-        return create_response(str(e), stderr=str(e), return_code=500)
+        return create_response(
+            message="SSH failed.",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/count-sessions-by-owner', methods=['GET'])
 def count_sessions(owner=None):
@@ -439,7 +527,12 @@ def count_sessions(owner=None):
         if owner == None:
             owner = request.args.get('owner')
         if not owner:
-            return create_response("Missing owner parameter. Please specify owner in the query string.", return_code=400)
+            return create_response(
+                message="Missing owner parameter. Please specify owner in the query string.",
+                stdout=None,
+                stderr=None,
+                return_code=400
+            )
         
         response = get_list_sessions() # tuple: json, http code
         data = response[0] # json part
@@ -449,9 +542,19 @@ def count_sessions(owner=None):
         # Count occurrences of the owner in the message
         count = stdout.count(f"Session: '{owner}'")
 
-        return create_response(str(count), stdout=f"Count: {count}", return_code=200)
+        return create_response(
+            message=str(count),
+            stdout=None,
+            stderr=None,
+            return_code=200
+        )
     except:
-        return create_response("Error: Failed to run count-sessions", stderr=str(e), return_code=500)
+        return create_response(
+            message="Failed to run count-sessions.",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/create-session', methods=['GET'])
 def create_session():
@@ -469,13 +572,33 @@ def create_session():
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
             output, error = process.communicate()
             if process.returncode == 0:
-                return create_response("created", stdout=output.decode(), stderr=error.decode())
+                return create_response(
+                    message="Created.",
+                    stdout=output.decode(),
+                    stderr=error.decode(),
+                    return_code=200
+                )
             else:
-                return create_response("Error: Failed to run create-session", stdout=output.decode(), stderr=error.decode(), return_code=500)
+                return create_response(
+                    message="Error: Failed to run create-session.",
+                    stdout=output.decode(),
+                    stderr=error.decode(),
+                    return_code=500
+                )
         except Exception as e:
-            return create_response("Error: Failed to run create-session", stderr=str(e), return_code=500)
+                return create_response(
+                    message="Error: Failed to run create-session.",
+                    stdout=None,
+                    stderr=str(e),
+                    return_code=500
+                )
     else:
-        return create_response("already exist.", stdout=f"Count: {owner_count}", return_code=500)
+        return create_response(
+            message="Already exist.",
+            stdout=f"Count: {owner_count}",
+            stderr=None,
+            return_code=500
+        )
 
 @app.route('/close-session', methods=['GET'])
 def close_session(session_id=None):
@@ -498,16 +621,32 @@ def close_session(session_id=None):
 def list_connections(owner=None):
     owner = request.args.get('owner')
     if not owner:
-        return create_response("Missing owner parameter. Please specify owner in the query string.", return_code=400)
+        return create_response(
+        message="Missing owner parameter. Please specify owner in the query string.",
+        stdout=None,
+        stderr=None,
+        return_code=400
+    )
+
     command = " ".join(["dcv", "list-connections", owner])
     try:
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
         output, error = process.communicate()
         output = output.decode("utf-8")
         error = error.decode("utf-8")
-        return create_response(output, stdout=output, stderr=error)
+        return create_response(
+        message=output,
+        stdout=output,
+        stderr=error,
+        return_code=None
+    )
     except Exception as e:
-        return create_response("Error: Failed to list connections", stderr=str(e), return_code=500)
+        return create_response(
+            message="Error: Failed to list connections.",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/check-session-timedout', methods=['GET'])
 def check_session_timedout(session_id=None):
@@ -522,16 +661,21 @@ def check_session_timedout(session_id=None):
 
     if session_timeout == 0:
         return create_response(
-            "Session timedout check is disabled because session_timeout is equal zero.",
+            message="Session timedout check is disabled because session_timeout is equal zero.",
             stdout=f"Inactive duration: {inactive_duration} seconds",
-            stderr=error
+            stderr=None,
+            return_code=200
         )
 
     if not session_id:
-        return create_response("Missing session_id parameter. Please specify owner in the query string.", return_code=400)
+        return create_response(
+            message="Missing session_id parameter. Please specify owner in the query string.",
+            stdout=None,
+            stderr=None,
+            return_code=400
+        )
     
     command= " ".join(["dcv", "describe-session", session_id, "--json"])
-
 
     try:
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
@@ -540,7 +684,12 @@ def check_session_timedout(session_id=None):
         error = error.decode("utf-8")
 
         if process.returncode != 0:
-            return create_response("Error: Failed to describe session", stdout=output, stderr=error, return_code=500)
+            return create_response(
+                message="Error: Failed to describe session.",
+                stdout=output,
+                stderr=error,
+                return_code=500
+            )
 
         data = json.loads(output)
         num_connections = data.get("num-of-connections", 0)
@@ -563,18 +712,25 @@ def check_session_timedout(session_id=None):
                 return close_session(session_id)
             else:
                 return create_response(
-                    "There are no users connected, but the session has not been inactive long enough.",
+                    message="There are no users connected, but the session has not been inactive long enough.",
                     stdout=f"Inactive duration: {inactive_duration} seconds",
-                    stderr=error
+                    stderr=error,
+                    return_code=200
                 )
         else:
             return create_response(
-                "There are users still connected under DCV session.",
+                message="There are users still connected under DCV session.",
                 stdout=output,
-                stderr=error
+                stderr=error,
+                return_code=200
             )
     except Exception as e:
-        return create_response("Error: Failed to check session timeout", stderr=str(e), return_code=500)
+        return create_response(
+            message="Error: Failed to check session timeout.",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/list-sessions-owners', methods=['GET'])
 def list_sessions_owners():
@@ -594,10 +750,20 @@ def list_sessions_owners():
             owner = session.get("owner")
             if owner:
                 owners.append(owner)
-
-        return create_response(owners, stdout=json.dumps(owners), return_code=200)
+    
+        return create_response(
+            message=owners,
+            stdout=json.dumps(owners),
+            stderr=None,
+            return_code=200
+        )
     except Exception as e:
-        return create_response("Error: Failed to list session owners", stderr=str(e), return_code=500)
+        return create_response(
+            message="Error: Failed to list session owners",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/get-first-session', methods=['GET'])
 def get_first_session():
@@ -620,9 +786,19 @@ def get_first_session():
                 session_name = match.group(1)
         
         # Return the session name; if session_name is None, jsonify will output null
-        return create_response(session_name, return_code=200)
+        return create_response(
+            message=session_name,
+            stdout=None,
+            stderr=None,
+            return_code=200
+        )
     except Exception as e:
-        return create_response("Error retrieving first session", stderr=str(e), return_code=500)
+        return create_response(
+            message="Error retrieving first session",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/list-sessions', methods=['GET'])
 def get_list_sessions():
@@ -633,9 +809,19 @@ def get_list_sessions():
         output = output.decode("utf-8")
         error = error.decode("utf-8")
 
-        return create_response(output, stdout=output, stderr=error)
+        return create_response(
+            message=output,
+            stdout=output,
+            stderr=error,
+            return_code=200
+        )
     except Exception as e:
-        return create_response("Error: Failed to run 'dcv list-sessions'", stderr=str(e), return_code=500)
+        return create_response(
+            message="Error: Failed to run 'dcv list-sessions'",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/list-sessions-json', methods=['GET'])
 def get_list_sessions_json():
@@ -649,15 +835,34 @@ def get_list_sessions_json():
         try:
             json_output = json.loads(output)
         except json.JSONDecodeError:
-            return create_response("Error: Failed to parse JSON output", stderr="Invalid JSON format", return_code=500)
-
-        return create_response(json_output, stdout=output, stderr=error, return_code=200)
+            return create_response(
+                message="Error: Failed to parse JSON output",
+                stdout=None,
+                stderr="Invalid JSON format",
+                return_code=500
+            )
+        return create_response(
+            message=json_output,
+            stdout=output,
+            stderr=error,
+            return_code=200
+        )
     except Exception as e:
-        return create_response("Error: Failed to run 'dcv list-sessions'", stderr=str(e), return_code=500)
+        return create_response(
+            message="Error: Failed to run 'dcv list-sessions'",
+            stdout=None,
+            stderr=str(e),
+            return_code=500
+        )
 
 @app.route('/', methods=['GET'])
 def get_data():
-    return create_response("This is an API used to manage your DCV services.")
+    return create_response(
+        message="This is an API used to manage your DCV services.",
+        stdout=None,
+        stderr=None,
+        return_code=200
+    )
 
 if __name__ == '__main__':
     app.run(debug=False)
