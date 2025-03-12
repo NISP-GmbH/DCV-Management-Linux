@@ -47,7 +47,7 @@ main()
         echo "Suggestions:"
         echo "Ubuntu 22.04+: sudo apt update && sudo apt install -y python3 python3-venv python3-dev"
         echo "Ubuntu 20.04: sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt update && sudo apt upgrade python3.8 python3.8-venv python3.8-dev"
-        echo "RedHat EL8: sudo subscription-manager repos --enable codeready-builder-for-rhel-8-x86_64-rpms && sudo yum install -y python38 python38-devel python38-pip"
+        echo "RedHat EL8: sudo dnf config-manager --set-enabled powertools && sudo yum install -y python38 python38-devel python38-pip"
         echo "RedHat EL9: sudo dnf install -y python3 python3-devel python3-pip &&"
         exit 11
     fi
