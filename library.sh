@@ -127,6 +127,7 @@ createDirectories()
     sudo mkdir -p /var/run/dcvsimpleextauth
     sudo mkdir -p $dcv_tokens_path
     sudo mkdir -p /etc/dcv-management/sessions-permissions.d
+    sudo mkdir -p /etc/dcv-management/notifications.d/
 }
 
 createSettingsFile()
@@ -139,6 +140,8 @@ dcv_collab=false
 dcv_collab_prompt_timeout=20
 dcv_collab_session_name=
 dcv_collab_sessions_permissions_dir=/etc/dcv-management/sessions-permissions.d
+dcv_management_maintenance_dir=/etc/dcv-management/notifications.d/
+dcv_management_maintenance_timeout=20
 EOF
    
     # do not create the file again if already exist
@@ -217,10 +220,12 @@ setAuthTokenVerifier()
 setupScripts()
 {
     # Install scripts
-    sudo cp $(basename $dcv_collab_prompt_script).sh $dcv_collab_prompt_script
-    sudo chmod +x $dcv_collab_prompt_script
-    sudo cp $(basename $dcv_local_sessions).sh $dcv_local_sessions
-    sudo chmod +x $dcv_local_sessions
+    for script_name in $dcv_notify_users $dcv_collab_prompt_script $dcv_local_sessions
+    do
+        script_file_name=$(basename ${script_name})
+        sudo cp ${script_file_name}.sh $script_name
+        sudo chmod +x $script_name
+    done
 
     # Create the script that will create and return the token
     cat <<EOF | sudo tee /usr/bin/dcv_get_token
