@@ -33,11 +33,6 @@ then
     exit 13
 fi
 
-if ! echo $session_type | egrep -iq "(console|virtual)"
-then
-    exit 17
-fi
-
 if ! echo $session_auto_creation_by_dcv | egrep -iq "(true|false)"
 then
     exit 16
