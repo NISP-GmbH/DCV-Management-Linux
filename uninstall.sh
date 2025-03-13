@@ -13,9 +13,9 @@ sudo rm -rf $dcv_tokens_path
 # remove scripts
 sudo rm -f /usr/bin/dcv_get_token
 sudo rm -f /usr/bin/dcv_tokens_check
-sudo rm -f /usr/bin/dcv_local_sessions
 sudo rm -f /usr/bin/dcv_local_sessions_timedout
-sudo rm -f $dcv_collab_prompt_script
+sudo rm -f /usr/bin/dcv_notify_users
+sudo rm -f $dcv_notify_users
 sudo rm -f $dcv_local_sessions
 sudo rm -f $dcv_management_conf_path
 sudo rm -f $dcv_pamd_file_conf
