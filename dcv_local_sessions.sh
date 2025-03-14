@@ -1,4 +1,5 @@
 #!/bin/bash
+
 #set -e
 
 # variables
@@ -22,6 +23,16 @@ then
     exit 12
 fi
 
+processNotifications()
+{
+    curl -s http://${hostname}:${port}/process-notification-auth?username=${username} 2> /dev/null
+}
+
+authApproved()
+{
+    processNotifications
+    exit 0
+}
 
 collab_enabled=$(echo "$curl_result" | jq -r '.message.collab_enabled')
 session_type=$(echo "$curl_result" | jq -r '.message.session_type')
@@ -65,7 +76,7 @@ then
         if [ "$number_of_connections" -eq 0 ]
         then
             curl_result=$(curl -s -X POST "http://${hostname}:${port}/collab-set-session-owner?session_owner=${username}&session_id=${session_id}")
-            exit 0
+            authApproved
         else
             curl_result=$(curl -s -X GET "http://${hostname}:${port}/collab-get-session-owner")
             collab_session_owner=$(echo $curl_result | jq -r '.message.collab_session_owner')
@@ -73,7 +84,7 @@ then
             # if is not the first user connected, but is the owner
             if [[ "$username" == "$collab_session_owner" ]]
             then
-                exit 0
+                authApproved
             # if is not the first user connected, and is not the owner
             else
                 curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?collab_session_owner=${collab_session_owner}&collab_username=${username}&number_of_connections=$number_of_connections&session_id=${session_id}")
@@ -81,7 +92,7 @@ then
 
                 if echo $approval | egrep -iq "true"
                 then
-                    exit 0
+                    authApproved
                 else
                     exit 18
                 fi
@@ -130,13 +141,13 @@ then
         curl -s http://${hostname}:${port}/create-session?owner=$username 2>&1 >> /dev/null
         if [ $? -eq 0 ]
         then
-            exit 0
+            authApproved
         else
             exit 1
         fi
     # if there is a session
     else
-        exit 0
+        authApproved
     fi
 fi
 
@@ -149,7 +160,7 @@ then
         # and if the user is the collab session owner
         if echo $username | egrep -iq "^${collab_session_owner}$"
         then
-            exit 0
+            authApproved
         # and the user is not the collab session owner
         else
             # get the id of the session created by DCV
@@ -174,7 +185,7 @@ then
 
             if echo $approval | egrep -iq "true"
             then
-                exit 0
+                authApproved
             else
                 exit 3
             fi
@@ -184,7 +195,7 @@ then
         curl -s http://${hostname}:${port}/create-session?owner=$username 2>&1 >> /dev/null
         if [ $? -eq 0 ]
         then
-            exit 0
+            authApproved
         else
             exit 2
         fi

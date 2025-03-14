@@ -28,6 +28,7 @@ The DCV Management service is currently capable to do:
 * List sessions by owner
 * Check session timedout
 * Collaboration session: The session owner will control the session and additional users can ask to see (without control) the owner session
+* Schedule notifications to send to GNOME session users, get the answer and store in the systemd journal
 
 Advantages of the local Python HTTP API:
 * Do not need to use SUDO anymore, as we can control the service using http calls
@@ -37,6 +38,56 @@ Advantages of the local Python HTTP API:
 * Python3.x is available since 2009, and 3.6 since 2016. So all distros, mainly the server editions, has Python3 to run the API
 * Python Flask was used to write the API; Simple library (does not depend of other libraries), where we can write a very simple code, spending more time in the company solutions than in library syntax. ref: https://flask.palletsprojects.com/en/3.0.x/quickstart/
 * The Python code is organized due the mandatory indentation. Also is simple, so anyone can read and understand, besides the syntax. Also, AI's like ChatGPT, Gemini etc are very efficient to understand Python code. Also Python is a base language for many distros, like Bash and Perl.
+
+### Notification system
+
+If you want to notify all users by something, you can schedule an event and then run a cronjob to process this event from time-to-time. All GNOME sessions active during the cronjob execution will receive a notification. The answer (or timeout to answer) will be logged in the systemd journal. The user will also receive the notification 20 seconds after the authentication.
+
+* To schedule an event:
+```bash
+curl -X POST "http://localhost:5000/schedule-notification" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "year": 2025,
+    "month": 3,
+    "day": 14,
+    "hour": 15,
+    "minute": 30,
+    "title": "Maintenance scheduled",
+    "text": "In the day 14, month 3, ywaer 2025, at 15:30, this server will reboot for maintenance.",
+    "type": "maintenance",
+    "button1": "Aware, agree",
+    "button2": "Aware, not agree"
+    "button2": "Help!"
+  }'
+``` 
+
+__Notes:__
+* You can create multiple buttons (1, 2, 3, ... , n)
+* If the user does not answer or just exit the window, everything will be logged
+* You can check the event answers executing:
+```bash
+journalctl --no-page | grep "\[DCV Management Notification\]"
+```
+
+Every notification will create a file that will be stored in:
+```bash
+/etc/dcv-management/notifications.d/
+```
+
+You can manually edit the notifications files, but we recommend create a new event using curl and remove the file that you want to change to avoid syntax issues.
+
+When the event is in the past, the users will not be notified anymore.
+
+To process the events from time-to-time, you can crate a cronjob that will do:
+```bash
+curl "http://localhost:5000/process-notifications"
+```
+
+If you want to process just specific event in a specific cronjob, you can also send the notification type. The other types will be ignored.
+```bash
+curl -s http://localhost:5000/process-notifications?type=maintenance
+```
 
 ### Collaboration session
 
@@ -102,28 +153,102 @@ bash uninstall.sh
 
 ### HTTP requests to the DCV Management API Service
 
-* Counting how much sessions a specific owner has:
-```
-curl -s http://localhost:5000/count-sessions-by-owner?owner=francisco
+#### Sessions
+
+* Create a session
+```bash
+curl "http://localhost:5000/create-session?owner=john"
 ```
 
-* List all sessions
-```
-curl -s http://localhost:5000/list-sessions
-```
-
-* Create a session with specific owner:
-```
-curl -s http://localhost:5000/create-session?owner=centos
-```
-* Check a session with specific owner and close the session if there are no one connected in last 30 minutes
-```
- curl -s http://localhost:5000/check-session-timedout?owner=francisco
+* Close the session
+```bash
+curl "http://localhost:5000/close-session?session_id=session123"
 ```
 
-* List all owners with sessions created
+* List session id connections
+```bash
+curl "http://localhost:5000/list-connections?session_id=john"
 ```
-curl -s http://localhost:5000/list-sessions-owners
+
+* Get the session owner given a session name
+```bash
+curl "http://localhost:5000/get-session-owner?session_name=mySession"
+```
+
+* Count sessions by owner
+```bash
+curl "http://localhost:5000/count-sessions-by-owner?owner=john"
+```
+
+* List all session owners
+```bash
+curl "http://localhost:5000/list-sessions-owners"
+```
+
+* List sessions by with cli result or json
+```bash
+curl "http://localhost:5000/list-sessions"
+curl "http://localhost:5000/list-sessions-json"
+```
+
+#### Session Timeout
+
+* Check for session timeout
+```bash
+curl "http://localhost:5000/check-session-timedout?session_id=session123"
+```
+
+#### Collaboration
+
+* Remove one user from collaboration session
+```bash
+curl -X POST "http://localhost:5000/remove-permission?collab_owner_username=john&collab_session_name=session123&collab_del_username=alice"
+```
+
+* Ask to collaboration session owner to approve a new user to see the screen
+```bash
+curl -X POST "http://localhost:5000/approve-login?collab_session_owner=john&session_id=session123&collab_username=alice"
+```
+
+* Set the collaboration session owner
+```bash
+curl -X POST "http://localhost:5000/collab-set-session-owner?session_id=session123&session_owner=john"
+```
+
+* Check collaboration settings
+```bash
+curl "http://localhost:5000/check-collab-settings"
+```
+
+#### Notifications
+* Process all possible notifications to specific user by dcv_local_sessions script:
+```bash
+curl "http://localhost:5000/process-notification-auth?username=alice"
+```
+
+* Process all possible notifications to all logged users or specific user:
+```bash
+curl "http://localhost:5000/process-notifications"
+curl "http://localhost:5000/process-notifications?username=alice"
+```
+
+* Schedule a notification to send to all users:
+```bash
+curl -X POST "http://localhost:5000/schedule-notification" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "year": 2025,
+    "month": 3,
+    "day": 14,
+    "hour": 15,
+    "minute": 30,
+    "title": "Test Notification",
+    "text": "This is a test notification.",
+    "type": "Maintenance",
+    "button1": "Aware",
+    "button2": "Help"
+    "button2": "Exit"
+  }'
 ```
 
 ## DCV Dynamic Session Creation

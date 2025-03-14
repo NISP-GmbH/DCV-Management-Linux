@@ -1,21 +1,24 @@
-import paramiko
-from io import StringIO
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from flask import Flask, request, jsonify
+from datetime import datetime
+from io import StringIO
+import configparser
 import subprocess
-import os
+import threading
+import paramiko
+import logging
+import time
 import json
+import stat
+import glob
 import re
 import pwd
-import stat
-from datetime import datetime
+import os
 
 app = Flask(__name__)
-
-# Global variable
 collab_session_owner = ""
 
 def read_settings_conf():
-    # Define fallback/default values
     settings = {
         "session_type": "virtual",
         "dcv_collab": "false",
@@ -23,13 +26,14 @@ def read_settings_conf():
         "session_timeout": 3600,
         "dcv_collab_prompt_timeout": 20,
         "dcv_collab_session_name": "",
-        "dcv_collab_sessions_permissions_dir": "/etc/dcv-management/sessions-permissions.d"
+        "dcv_collab_sessions_permissions_dir": "/etc/dcv-management/sessions-permissions.d",
+        "dcv_management_maintenance_dir": "/etc/dcv-management/notifications.d/",
+        "dcv_management_maintenance_timeout": "20"
     }
     try:
         with open('/etc/dcv-management/settings.conf', 'r') as file:
             for line in file:
                 line = line.strip()
-                # Skip empty lines and comments
                 if not line or line.startswith('#'):
                     continue
                 if '=' in line:
@@ -168,8 +172,6 @@ def get_session_type():
             print(f"The session type >>> {session_type} <<< was not recognized from settings.conf file.")
             session_type = "virtual"  # Fallback value
     except Exception as e:
-        # Although read_settings_conf already handles exceptions,
-        # adding an extra layer can ensure robustness
         print(f"Error determining session_type: {e}")
         session_type = "virtual"
     return session_type
@@ -195,6 +197,194 @@ def add_permission():
     response, status_code = manage_permission_file(collab_session_owner, collab_session_name, new_permission_line=new_line)
     return jsonify(response), status_code
 
+def sanitize_filename(s):
+    return re.sub(r'\W+', '', s)
+
+def get_all_gnome_sessions():
+    users = set()
+    try:
+        # Run the 'ps' command to list all processes with user and command name.
+        output = subprocess.check_output(["ps", "-eo", "user,comm"], text=True)
+        for line in output.splitlines():
+            if "gnome-session" in line or "gnome-shell" in line:
+                # The first word should be the username.
+                parts = line.split()
+                if parts:
+                    users.add(parts[0])
+    except Exception as e:
+        logging.error(f"Error listing GNOME sessions: {e}")
+    return list(users)
+
+def process_notification_file(filepath, target_user=None, filter_type=None):
+    config_data = configparser.ConfigParser()
+    config_data.read(filepath)
+    file_timestamp = int(config_data['date']['timestamp'])
+    notif_type = config_data['notification'].get('type')
+    now = datetime.now().timestamp()
+
+    if filter_type is not None and notif_type != filter_type:
+        return
+    
+    # Get the notification message details.
+    title = config_data['message'].get('title', '')
+    text = config_data['message'].get('text', '')
+
+    # Define a custom delimiter (ASCII Unit Separator) that is unlikely to be used in button texts.
+    DELIMITER = "\x1f"
+    buttons_str = ""
+    if 'buttons' in config_data:
+        sorted_buttons = [config_data['buttons'][key] for key in sorted(config_data['buttons'].keys())]
+        buttons_str = DELIMITER.join(sorted_buttons)
+
+    if now < file_timestamp:
+        settings_global = read_settings_conf()
+        try:
+            maint_timeout = int(settings_global.get('dcv_management_maintenance_timeout', '20'))
+        except Exception as e:
+            maint_timeout = 20
+        if target_user:
+            users = [target_user]
+        else:
+            users = get_all_gnome_sessions()
+
+        if users:
+            with ThreadPoolExecutor(max_workers=len(users)) as executor:
+                future_to_user = {}
+                for user in users:
+                    cmd = ["/usr/bin/dcv_notify_users", user, notif_type, title, text]
+                    if buttons_str:
+                        cmd.append(buttons_str)
+                    # Submit the process with the timeout enforced directly.
+                    future = executor.submit(
+                        subprocess.run,
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=maint_timeout
+                    )
+                    future_to_user[future] = user
+
+                for future in as_completed(future_to_user):
+                    user = future_to_user[future]
+                    try:
+                        result = future.result()
+                        answer = result.stdout.strip()
+                        if result.returncode == 0:
+                            logging.info(f"[DCV Management Notification] Notification sent to user '{user}' with title '{title}' and text '{text}'. User response: '{answer}'.")
+                        else:
+                            logging.warning(f"[DCV Management Notification] Notification for user '{user}' with title '{title}' and text '{text}' returned error: {result.stderr.strip()}.")
+                    except subprocess.TimeoutExpired as toe:
+                        logging.error(f"[DCV Management Notification] Notification for user '{user}' with title '{title}' and text '{text}' timed out after {maint_timeout} seconds with no user response.")
+                    except Exception as e:
+                        logging.error(f"[DCV Management Notification] Error notifying user '{user}' with title '{title}' and text '{text}': {e}")
+        else:
+            logging.info("[DCV Management Notification] No active GNOME sessions found.")
+    else:
+        logging.info(f"[DCV Management Notification] Notification file '{filepath}' is not yet due (current time is less than scheduled).")
+
+def delayed_process_notifications_for_user(target_user):
+    # Wait for 20 seconds before processing notifications.
+    time.sleep(20)
+    settings = read_settings_conf()
+    maintenance_dir = settings.get('dcv_management_maintenance_dir', '')
+    files = glob.glob(os.path.join(maintenance_dir, "*.[0-9]*"))
+    if not files:
+        logging.info("No notification files found for delayed processing.")
+        return
+    for filepath in files:
+        process_notification_file(filepath, target_user)
+
+@app.route('/process-notification-auth', methods=['GET'])
+def process_notification_auth():
+    username = request.args.get('username')
+    if not username:
+        return create_response("Missing username parameter", return_code=400)
+    threading.Thread(target=delayed_process_notifications_for_user, args=(username,)).start()
+    return create_response("Notification processing scheduled for user", return_code=200)
+
+@app.route('/process-notifications', methods=['GET'])
+def process_notifications():
+    try:
+        username = request.args.get('username')
+        notif_type = request.args.get('type')
+        settings = read_settings_conf()
+        maintenance_dir = settings.get('dcv_management_maintenance_dir', '')
+        files = glob.glob(os.path.join(maintenance_dir, "*.[0-9]*"))
+        if not files:
+            return create_response("No notifications found", return_code=200)
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(process_notification_file, f, username, notif_type): f for f in files}
+            for future in as_completed(futures):
+                pass
+        return create_response("Processing completed", return_code=200)
+    except Exception as e:
+        logging.error(f"Error processing notifications: {e}")
+        return create_response(str(e), return_code=500)
+
+@app.route('/schedule-notification', methods=['POST'])
+def schedule_notification():
+    try:
+        data = request.get_json() or request.form
+
+        year   = int(data.get('year'))
+        month  = int(data.get('month'))
+        day    = int(data.get('day'))
+        hour   = int(data.get('hour'))
+        minute = int(data.get('minute'))
+        scheduled_dt = datetime(year, month, day, hour, minute)
+        timestamp = int(scheduled_dt.timestamp())
+
+        title = data.get('title')
+        text  = data.get('text')
+        if not title or not text:
+            return create_response("Missing title or text", return_code=400)
+
+        notif_type = data.get('type')
+        if notif_type not in ['session_started', 'session_opened']:
+            return create_response("Invalid notification type", return_code=400)
+
+        # Retrieve optional button parameters (e.g., button1, button2, etc.)
+        buttons = {}
+        for key in data:
+            if key.startswith('button'):
+                buttons[key] = data.get(key)
+
+        # Create an INI configuration for the notification file.
+        config_data = configparser.ConfigParser()
+        config_data['date'] = {
+            'day': str(day),
+            'month': str(month),
+            'year': str(year),
+            'hour': str(hour),
+            'minute': str(minute),
+            'timestamp': str(timestamp)
+        }
+        config_data['message'] = {
+            'title': title,
+            'text': text
+        }
+        config_data['buttons'] = buttons
+        config_data['notification'] = {
+            'type': notif_type
+        }
+
+        safe_title = sanitize_filename(title)
+        filename = f"{safe_title}.{timestamp}"
+        settings = read_settings_conf()
+        maintenance_dir = settings.get('dcv_management_maintenance_dir', '')
+
+        filepath = os.path.join(maintenance_dir, filename)
+
+        with open(filepath, 'w') as f:
+            config_data.write(f)
+
+        return create_response("Notification scheduled", stdout=filename, return_code=200)
+    except ValueError as ve:
+        return create_response(f"Invalid date provided: {ve}", return_code=400)
+    except Exception as e:
+        return create_response(str(e), return_code=500)
+    
 @app.route('/remove-permission', methods=['POST'])
 def remove_permission():
     collab_owner_username = request.args.get('collab_owner_username')
@@ -220,7 +410,6 @@ def remove_permission():
                 if line.strip() != f"{collab_del_username} allow display":
                     file.write(line)
 
-        # Execute the command
         command = [
             "sudo",
             "dcv",
@@ -271,10 +460,8 @@ def approve_login():
                 return_code=400
             )
 
-        # Path to the send_prompt.sh script
-        script_perm_prompt_path = "/usr/bin/dcv_collab_prompt"  # Update this path accordingly
+        script_perm_prompt_path = "/usr/bin/dcv_collab_prompt"
 
-        # Ensure the script exists
         if not os.path.isfile(script_perm_prompt_path):
             return create_response(
                 message="Approval script not found on server.",
@@ -283,7 +470,6 @@ def approve_login():
                 return_code=500
             )
 
-        # Set timeout in seconds
         settings = read_settings_conf()
         timeout = settings.get('dcv_collab_prompt_timeout', '')
         session_auto_creation_by_dcv = settings.get('session_auto_creation_by_dcv', '').strip()
@@ -409,7 +595,7 @@ def check_collab_settings():
                 else:
                     return create_response({"collab_enabled": True, "session_name": None, "session_type": dcv_collab_session_type, "session_auto_creation_by_dcv": session_auto_creation_by_dcv})
         else:
-            return create_response({"collab_enabled": False})
+            return create_response({"collab_enabled": False, "session_auto_creation_by_dcv": session_auto_creation_by_dcv})
     except Exception as e:
         return create_response(
             message="Error.",
@@ -618,8 +804,8 @@ def close_session(session_id=None):
         return create_response("Error: Failed to run close-session", stderr=str(e), return_code=500)
 
 @app.route('/list-connections', methods=['GET'])
-def list_connections(owner=None):
-    owner = request.args.get('owner')
+def list_connections(session_id=None):
+    owner = request.args.get('session_id')
     if not owner:
         return create_response(
         message="Missing owner parameter. Please specify owner in the query string.",
@@ -628,7 +814,7 @@ def list_connections(owner=None):
         return_code=400
     )
 
-    command = " ".join(["dcv", "list-connections", owner])
+    command = " ".join(["dcv", "list-connections", session_id])
     try:
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
         output, error = process.communicate()
@@ -865,4 +1051,5 @@ def get_data():
     )
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     app.run(debug=False)
