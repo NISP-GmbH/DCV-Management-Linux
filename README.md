@@ -41,6 +41,8 @@ Advantages of the local Python HTTP API:
 
 ### Notification system
 
+![Image](https://github.com/user-attachments/assets/db8357d0-d798-46e3-be85-2c0656244515)
+
 If you want to notify all users by something, you can schedule an event and then run a cronjob to process this event from time-to-time. All GNOME sessions active during the cronjob execution will receive a notification. The answer (or timeout to answer) will be logged in the systemd journal. The user will also receive the notification 20 seconds after the authentication.
 
 * To schedule an event:
@@ -90,6 +92,8 @@ curl -s http://localhost:5000/process-notifications?type=maintenance
 ```
 
 ### Collaboration session
+
+![Image](https://github.com/user-attachments/assets/529dfca0-36f5-4d92-82d4-5059c39667c4)
 
 To enable the feature, you need to edit /etc/dcv-management/settings.conf and enable:
 
