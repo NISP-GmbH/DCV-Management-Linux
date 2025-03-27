@@ -66,7 +66,7 @@ checkLinuxDistro()
         then
             if echo "$release_info" | egrep -iq stream
             then
-                redhat_distro_based_version=$(cat /etc/redhat-release  |  grep -oE '[0-9]+')
+                redhat_distro_based_version=$(cat /etc/redhat-release  |  grep -oE '[0-9]+' | head -n 1)
             else
                 redhat_distro_based_version=$(echo "$release_info" | grep -oE '[0-9]+\.[0-9]+' | cut -d. -f1)
             fi
