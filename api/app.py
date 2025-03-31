@@ -341,7 +341,7 @@ def schedule_notification():
             return create_response("Missing title or text", return_code=400)
 
         notif_type = data.get('type')
-        if notif_type not in ['session_started', 'session_opened']:
+        if not notif_type:
             return create_response("Invalid notification type", return_code=400)
 
         # Retrieve optional button parameters (e.g., button1, button2, etc.)
