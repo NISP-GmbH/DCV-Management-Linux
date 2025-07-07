@@ -179,13 +179,13 @@ copyPythonApp()
 
 setupRedhatPackages()
 {
-    sudo yum -y install ${python3_bin}-pip jq
+    sudo yum -y install ${python3_bin}-pip jq curl
 }
 
 setupUbuntuPackages()
 {
     sudo apt update
-    sudo apt -y install ${python3_bin}-pip jq
+    sudo apt -y install ${python3_bin}-pip jq curl
 }
 
 setupPythonRequiredLibraries()
