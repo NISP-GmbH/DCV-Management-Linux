@@ -250,7 +250,7 @@ curl -X POST "http://localhost:5000/schedule-notification" \
     "text": "This is a test notification.",
     "type": "Maintenance",
     "button1": "Aware",
-    "button2": "Help"
+    "button2": "Help",
     "button2": "Exit"
   }'
 ```

@@ -281,7 +281,7 @@ def process_notification_file(filepath, target_user=None, filter_type=None):
         else:
             logging.info("[DCV Management Notification] No active GNOME sessions found.")
     else:
-        logging.info(f"[DCV Management Notification] Notification file '{filepath}' is not yet due (current time is less than scheduled).")
+        logging.info(f"[DCV Management Notification] Notification file '{filepath}' will be skipped due due date.")
 
 def delayed_process_notifications_for_user(target_user):
     # Wait for 20 seconds before processing notifications.
@@ -341,7 +341,7 @@ def schedule_notification():
             return create_response("Missing title or text", return_code=400)
 
         notif_type = data.get('type')
-        if notif_type not in ['session_started', 'session_opened']:
+        if not notif_type:
             return create_response("Invalid notification type", return_code=400)
 
         # Retrieve optional button parameters (e.g., button1, button2, etc.)
