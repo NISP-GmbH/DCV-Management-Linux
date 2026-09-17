@@ -47,14 +47,14 @@ checkLinuxDistro()
     then
         release_info=$(cat /etc/redhat-release)
 
-        if echo $release_info | egrep -iq "(centos|almalinux|rocky|oracle|red hat|redhat)"
+        if echo $release_info | grep -Eiq "(centos|almalinux|rocky|oracle|red hat|redhat)"
         then
             redhat_distro_based="true"
         fi
 
         if [[ "${redhat_distro_based}" == "true" ]]
         then
-            if echo "$release_info" | egrep -iq stream
+            if echo "$release_info" | grep -Eiq stream
             then
                 redhat_distro_based_version=$(cat /etc/redhat-release  |  grep -oE '[0-9]+' | head -n 1)
             else
@@ -77,7 +77,7 @@ checkLinuxDistro()
     else
         if [ -f /etc/debian_version ]
         then
-            if cat /etc/issue | egrep -iq "ubuntu"
+            if cat /etc/issue | grep -Eiq "ubuntu"
             then
                 ubuntu_distro="true"
                 ubuntu_version=$(lsb_release -rs)
@@ -226,7 +226,7 @@ token_expiration_time_in_seconds=\$1
 token=\$(openssl rand -hex 8 | tr -d '\n')
 token_timestamp=\$(date +%s)
 
-if echo \$token_expiration_time_in_seconds | egrep -iq "^[0-9]+$"
+if echo \$token_expiration_time_in_seconds | grep -Eiq "^[0-9]+$"
 then
         echo \$token | sudo dcvsimpleextauth add-user --session \$USER --auth-dir /var/run/dcvsimpleextauth/ --user \$USER --append
 
@@ -366,7 +366,7 @@ EOF
     fi
 
     # setup the cron to execute dcv_local_sessions_timedout
-    if ! cat /var/spool/cron/root | egrep -iq "dcv_local_sessions_timedout"
+    if ! cat /var/spool/cron/root | grep -Eiq "dcv_local_sessions_timedout"
     then
         cat <<EOF | sudo tee --append /var/spool/cron/root
 0,30 * * * * /usr/bin/dcv_local_sessions_timedout &> /dev/null

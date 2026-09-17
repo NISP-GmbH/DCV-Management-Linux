@@ -10,7 +10,7 @@ debug="false"
 debug_file_name="/tmp/dcv-management-auth-debug.log.$$"
 
 # enable verbose if debug is true
-if echo $debug | egrep -iq "true"
+if echo $debug | grep -Eiq "true"
 then
     exec 2>"${debug_file_name}";set -x
 fi
@@ -39,20 +39,20 @@ session_type=$(echo "$curl_result" | jq -r '.message.session_type')
 session_auto_creation_by_dcv=$(echo $curl_result | jq -r '.message.session_auto_creation_by_dcv')
 
 
-if ! echo $collab_enabled | egrep -iq "(true|false)"
+if ! echo $collab_enabled | grep -Eiq "(true|false)"
 then
     exit 13
 fi
 
-if ! echo $session_auto_creation_by_dcv | egrep -iq "(true|false)"
+if ! echo $session_auto_creation_by_dcv | grep -Eiq "(true|false)"
 then
     exit 16
 fi
 
 # if enabled, and the dcv server auto creation is enabled
-if echo $collab_enabled | egrep -iq "true"
+if echo $collab_enabled | grep -Eiq "true"
 then
-    if echo $session_auto_creation_by_dcv | egrep -iq "true"
+    if echo $session_auto_creation_by_dcv | grep -Eiq "true"
     then
         # get the id of the session created by DCV
         curl_result=$(curl -s http://${hostname}:${port}/list-sessions-json)
@@ -90,7 +90,7 @@ then
                 curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?collab_session_owner=${collab_session_owner}&collab_username=${username}&number_of_connections=$number_of_connections&session_id=${session_id}")
                 approval=$(echo "$curl_result" | jq -r ".message")
 
-                if echo $approval | egrep -iq "true"
+                if echo $approval | grep -Eiq "true"
                 then
                     authApproved
                 else
@@ -103,17 +103,17 @@ fi
 
 
 # if enabled, get the collab session name
-if echo $collab_enabled | egrep -iq "true"
+if echo $collab_enabled | grep -Eiq "true"
 then
     collab_session_name=$(echo "$curl_result" | jq -r '.message.session_name')
-    if ! echo ${collab_session_name} | egrep -iq "null"
+    if ! echo ${collab_session_name} | grep -Eiq "null"
     then
         curl_result=$(curl -s http://${hostname}:${port}/get-session-owner?session_name=${collab_session_name})
         collab_session_owner=$(echo "$curl_result" | jq -r '.message.owner')
     else
         curl_result=$(curl -s http://${hostname}:${port}/get-first-session)
         collab_session_name=$(echo "$curl_result" | jq -r '.message')
-        if ! echo $collab_session_name | egrep -iq "null"
+        if ! echo $collab_session_name | grep -Eiq "null"
         then
             curl_result=$(curl -s http://${hostname}:${port}/get-session-owner?session_name=${collab_session_name})
             collab_session_owner=$(echo "$curl_result" | jq -r '.message.owner')
@@ -124,7 +124,7 @@ then
 fi
 
 # check if there is a session created
-if curl -s http://${hostname}:${port}/list-sessions 2> /dev/null | egrep -iq "Session: [']${username}[']"
+if curl -s http://${hostname}:${port}/list-sessions 2> /dev/null | grep -Eiq "Session: [']${username}[']"
 then
     session_created="true"
 else
@@ -132,10 +132,10 @@ else
 fi
 
 # if collab is false
-if echo $collab_enabled | egrep -iq "false"
+if echo $collab_enabled | grep -Eiq "false"
 then
     # if there is no session
-    if echo $session_created | egrep -iq "false"
+    if echo $session_created | grep -Eiq "false"
     then
         # create the session
         curl -s http://${hostname}:${port}/create-session?owner=$username 2>&1 >> /dev/null
@@ -152,13 +152,13 @@ then
 fi
 
 # if collab feature is enabled
-if echo $collab_enabled | egrep -iq "true"
+if echo $collab_enabled | grep -Eiq "true"
 then
     # and the collab session is opened
-    if curl -s http://${hostname}:${port}/list-sessions 2> /dev/null | egrep -iq "Session: [']${collab_session_name}[']"
+    if curl -s http://${hostname}:${port}/list-sessions 2> /dev/null | grep -Eiq "Session: [']${collab_session_name}[']"
     then
         # and if the user is the collab session owner
-        if echo $username | egrep -iq "^${collab_session_owner}$"
+        if echo $username | grep -Eiq "^${collab_session_owner}$"
         then
             authApproved
         # and the user is not the collab session owner
@@ -183,7 +183,7 @@ then
             curl_result=$(curl -s -X POST "http://${hostname}:${port}/approve-login?collab_session_owner=${collab_session_owner}&collab_username=${username}&number_of_connections=$number_of_connections&session_id=${session_id}")
             approval=$(echo "$curl_result" | jq -r ".message")
 
-            if echo $approval | egrep -iq "true"
+            if echo $approval | grep -Eiq "true"
             then
                 authApproved
             else
