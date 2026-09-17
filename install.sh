@@ -27,11 +27,11 @@ main()
     else
         echo "Which distro you are using? Type >>> ubuntu <<< for Ubuntu based or >>> redhat <<< for RedHat based"
         read linux_distro
-        if echo $linux_distro | egrep -iq "ubuntu"
+        if echo $linux_distro | grep -Eiq "ubuntu"
         then
             ubuntu_distro="true"
         else
-            if echo $linux_distro | egrep -iq "redhat"
+            if echo $linux_distro | grep -Eiq "redhat"
             then
                 redhat_distro_based="true"
             else
